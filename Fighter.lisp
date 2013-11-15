@@ -2,12 +2,12 @@
            name
            ;ATTributes. How would I put these in a list (attributes (...)) and access them? 
            strength 
-              dexterity 
-              cunning
-              ;STATS
-              health 
-              stamina 
-              will)
+           dexterity 
+           cunning
+           ;STATS
+           health
+           stamina 
+           will)
 
 (defparameter *points* 20)
 
