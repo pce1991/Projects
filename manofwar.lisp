@@ -33,6 +33,7 @@
   (name nil)
   (ship-class nil);can I create substructs that are classes of ships? 
   (power 100) ;when selecting power-system, depending on which they choose just set this to a number. 
+  (drain 0)
   (engine '((max-speed 4) (acceleration 0))) ;should I include reverse thrusters? 
   (speed 0)
   (course nil) ;this will be a coordinate I think. 
@@ -47,7 +48,7 @@
              (missiles (hull-dmg 5) (shield-dmg 1) (power 1) (range 2) (range-penalty -15))
              (gauss (hull-dmg 15) (shield-dmg 5) (power 10) (range 5) (range-penalty -10))
              ;particle beam will have additional power drain for each dmg point increase, and does extra damage. When its fired (damage-inc) is 
-             ;added, and that adds to the 2 * inc to the power cost. Also needs to be changed so it is maintained, instead of a one-shot. 
+             ;added, and that adds to the 2 * inc to the power cost. Also needs to be changed so it is maintained, instead of a one-shot!
              (particle-beam (hull-dmg 1) (shield-dmg 10) (damage-inc 0) (power 5) (range 100) (range-penalty 0))
              ;will have more drain the longer charged and do more damage. charge adds 5 * charge to dmg, and 2 * charge to power. 
              ;need to set it up so this doesn't fire automatically, but charges, and then you choose to fire it. 
@@ -56,11 +57,12 @@
   (computer nil)
   (access nil)
   (hacked nil)
-  (drones '((drone1 nil) (drone2 nil)))
-  (weapon-location nil)
+;  (drones '((drone1 nil) (drone2 nil)))
+  (weapons-location nil)
   (shield-location nil)
   (engine-location nil)
-  (drones-location nil)
+  (power-location nil)
+;  (drones-location nil)
   (computer-location nil)
   ;5 sections, engine goes in oneplace, computer/you somewhere, power, weapons, shield. give 20 health each. 
   (layout '((bow nil) (lowbow nil) (port nil) (starboard nil) (stern nil))))
@@ -104,8 +106,7 @@
   (format t "Shields are currently at ~S% power. " (manofwar-shield ship))
   (format t "Set shield % to: ")
   (let ((set (read)))
-    (setf (manofwar-shield ship) set)
-    (when (> set 100) ;this doesn't check to make sure you have enough power anymore. To do that I'd have to set the shield and then set-power. 
+    (when (or (> set 100) (> (/ set 100.0) (manofwar-power ship))) ;this doesn't check to make sure you have enough power anymore. To do that I'd have to set the shield and then set-power. 
       ;the problem then is it displays current shields at a really high value, even though you don't have enough power for that. 
       (format t "Error, you do not have enough power.~%")
       (set-shield ship))
@@ -167,26 +168,11 @@
 (defun ion-cannon-drain (ship)
   )
 
-;make sure this works! DONT NEED THIS ANYMORE I DONT THINK
-(defun restore-power (ship)
-  (if (<= (manofwar-shield ship) 0)
-      (setf (manofwar-power ship) (+ (manofwar-power ship) 20))
-  (if (equal (manofwar-speed ship) 0)
-      (setf (manofwar-power ship) (+ (manofwar-power ship) 40))
-    (if (equal (manofwar-speed ship 1))
-        (setf (manofwar-power ship) (+ (manofwar-power ship) 20))))))
-
-;doesn't work particularly well right now. I'm having trouble setting it back to normal. 
-;maybe I should change it so power changes within setting commands. 
-(defun change-power(ship)
-  (cond ((> (manofwar-shield ship) 50) (setf (manofwar-power ship) (- (manofwar-power ship) 20)))
-        ((> (manofwar-shield ship) 0) (setf (manofwar-power ship) (- (manofwar-power ship) 10)))
-        ((equal (manofwar-shield ship) 0) (setf (manofwar-power ship) (+ (manofwar-power ship) 10)))))
 
 ;I don't think the wpn-power is necessary, I have a separate thing to check weapon power. Set up a boolean, that if it's true then the player
 ;is currently hacking, and then reduce power by a certain amount if that's true. 
 (defun set-power (ship)
-  (setf (manofwar-power ship) (- 100  (* 3 (round(/ (manofwar-shield ship) 10.0)))
+  (setf (manofwar-power ship) (- (- 100 (manofwar-drain ship))  (* 3 (round(/ (manofwar-shield ship) 10.0)))
                                  (* (manofwar-speed ship) 20))))
 ;                                 wpn-power)))
 
@@ -196,11 +182,9 @@
   (write-to-string (read)))
 ;  (read))
 
+;-----------------------------HACKING----------------------------------
 ;HACKING!!!! right now it doesn't take any power from you, and you can really wreck the other player. 
 ;should probably include a roll for this too to see how effective it is? 
-
-(defparameter *ship1Access* nil)
-(defparameter *ship2Access* nil)
 
 ;this gives access to the player to hack other systems. Maybe this takes in a ship and target instead, and changes access there, then
 ;every round it checks (manofwar-access ship1) and if t, then it allows you to pick a hack. If not it says "get-info." One you have info
@@ -220,12 +204,29 @@
   (format t "Enemy's next move will be random.~%")
   (setf (manofwar-hacked target) t))
   
+(defun hack-location (target)
+  (format t "Enter the system you'd like the location of.~% ")
+  (format t "[wpn] [shld] [comp] [eng] [pow]~%")
+  (let ((pick (read)))
+    (cond ((equal pick 'wpn) (format t "The weapons system is located at ~S.~%" (manofwar-weapons-location target)))
+          ((equal pick 'shld) (format t "The shield generator is located at ~S.~%" (manofwar-shield-location target)))
+          ((equal pick 'comp) (format t "The computer system is located at ~S.~%" (manofwar-computer-location target)))
+          ((equal pick 'eng) (format t "The engine is located at ~S.~%" (manofwar-engine-location target)))
+          ((equal pick 'pow) (format t "The power core is located at ~S.~%" (manofwar-power-location target))))))
+
+;this probably won't work until I have it display on different windows. 
+(defun hack-radar (target)
+)
 
 ;make hacking info a prerequisite of this? seems like hacking info is pretty useless if hacking a system gives you the info. 
+;this might not work for player2, because as soon as their round is over, everyone's power resets. 
 (defun hack-power (target)
   (format t "Target's current power is at: ~S~%" (manofwar-power target))
-  (format t "Drain power by how much?")
-  (setf (manofwar-power target) (- (manofwar-power target) (read))))
+  (format t "Power drained by ~S.~%" (round (/ (manofwar-power target) 2.0)))
+  (setf (manofwar-drain target) (round (/ (manofwar-power target) 2.0)))) 
+;  (format t "Drain power by how much? ")
+;  (setf (manofwar-drain target) (/ (read) 2)))
+;  (setf (manofwar-power target) (- (manofwar-power target) (read))))
 
 (defun hack-speed (target)
   (format t "Target's current speed is ~S" (manofwar-speed target))
@@ -234,8 +235,10 @@
 
 (defun hack-shield (target)
   (format t "Target's shield is currently at ~S% power.~%" (manofwar-shield target))
-  (format t "Reduce it by: ")
-  (setf (manofwar-shield target) (- (manofwar-shield target) (read))))
+  (format t "Shield drained by half energy. Now at: ~S%~%" (round (/ (manofwar-shield target) 2.0)))
+  (setf (manofwar-shield target) (round (/ (manofwar-shield target) 2.0))))
+;  (format t "Reduce it by: ")
+;  (setf (manofwar-shield target) (- (manofwar-shield target) (read))))
 
 ;might want to include something with this where the course is locked in for a few turns. 
 (defun hack-course (target)
@@ -248,7 +251,9 @@
 (defun pick-hack (ship target)
   (if (not (manofwar-access ship))
       (progn
-        (format t "Requesting access to ~S..............~%" (manofwar-name target))
+        (format t "Request denied. Would you like to get access: ")
+        (read)
+        (format t "~%Requesting access to ~S..............~%" (manofwar-name target))
         (format t "..forcing entry...%8.........%39...........%76.....%97~%")
         (format t ".....authentification retrievied......DONE..............Access granted.~%")
         (format t "Welcome lord ~S.~%" (manofwar-captain ship))
@@ -261,10 +266,11 @@
               ((equal pick 'shield) (hack-shield target))
               ((equal pick 'course) (hack-course target))
               ((equal pick 'system) (hack-pick target))
-              (t (format t "Error. Uncomputable entry.")))))))
+              ((equal pick 'location) (hack-location target))
+              (t (format t "Error. Uncomputable entry.~%") (pick-hack ship target)))))))
 
 
-
+;------------------------------NAVIGATION-------------------------------
 ;NAVIGATION  
 ;if the space is behind then the location will be negative, and if its to the right it'll also be neg
 ;ahead and to the left will be positive. I should reverse this so its easier to set location. NO
@@ -427,6 +433,7 @@
         (start-game)
       (custom-game))))
   
+
 ;maybe write these as smaller functions. 
 (defun show-round(map ship1 ship2 count)
   (set-power ship1)
@@ -439,16 +446,25 @@
                     (manofwar-course ship2)))
     (move ship2))
   (display-map map ship1 ship2)
+  (format t "=====================================================~%")
+  (set-power ship1)
   (if (manofwar-hacked ship1)
       (progn
        (setf (manofwar-hacked ship1) nil) ;this resets so that their next choice won't be random. 
        (random-command ship1 ship2))
     (get-command ship1 ship2))
+  (setf (manofwar-drain ship1) 0) ;this resets power levels to normal in case they were hacked; ensures hack only lasts one round. 
+  (set-power ship1)
+ ;might create general restore-hack function. 
+  (format t "=====================================================~%")
+  (set-power ship2)
   (if (manofwar-hacked ship2)
       (progn
        (setf (manofwar-hacked ship2) nil)
        (random-command ship2 ship1))
     (get-command ship2 ship1))
+  (setf (manofwar-drain ship2) 0)
+  (set-power ship2)
   (cond ((destruction ship1) (format t "~S was destroyed." (manofwar-name ship1)))
         ((destruction ship2) (format t "~S was destroyed." (manofwar-name ship2)))
         (t (show-round map ship1 ship2 (+ 1 count)))))
@@ -475,6 +491,9 @@
   (setf choice (read))
   (format t "~%Error, wrong!~%")
   (let ((pick (random 5)))
+;error, because if pick is same as choice, then it won't do anything, and so the player won't even get a random action. I'm not sure if this is
+;unbalanced or not. I'm not sure it is, the hacker essentially passes, there's a chance the enemy will pass too, but a higher chance they'll
+;just do something other than they intended. 
    (cond ((and (equal pick 0) (not (equal choice 'spd))) (set-speed ship))
           ((and (equal pick 1) (not (equal choice 'crs))) (set-course ship))
           ((and (equal pick 2) (not (equal choice 'shld))) (set-shield ship))
