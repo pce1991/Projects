@@ -22,8 +22,8 @@
         (cond ((equal (manofwar-location ship1) (aref map i j)) (format t "~10S " '(d_____7)))
               ((equal (manofwar-location ship2) (aref map i j)) (format t "~10S " '(<_____b) )))))
 ;include a check for drones in more conds
-    (format t "~%~%")))
- 
+    (format t "~%~%"))) 
+
 (defstruct manofwar
   (captain nil)
   (name nil)
@@ -154,7 +154,9 @@
 (defun set-course (ship)
   (format t "Current course is set to ~S." (manofwar-course ship))
   (format t "Change course to: ")
-  (setf (manofwar-course ship) (read)))
+  (let ((crs (read-from-string
+              (concatenate 'string "(" (read-line) ")"))))
+    (setf (manofwar-course ship) crs)))
 
 ;COMMANDS weapon systems.  
 (defun weapons (ship target)
@@ -345,7 +347,7 @@
 ;every round it checks (manofwar-access ship1) and if t, then it allows you to pick a hack. If not it says "get-info." One you have info
 ;it should print it out every round next to your info. 
 (defun hack-info (ship target)
-  (format t "Here is the enemies status: ")
+  (format t "Here is the enemies status: ~%")
   (print-status target t 0)
   (setf (manofwar-access ship) t))
 
@@ -528,9 +530,10 @@
 
 ;print these out really nicely formated. 
 (defun print-status (ship stream depth) ;ignore depth, but its required for some reason. 
-  (format stream "Starship ~S~%" (manofwar-name ship))
+  (format stream "Round: ~S~%" *round*)
+  (format stream "Starship ~20S Captain: ~S~%" (manofwar-name ship) (manofwar-captain ship))
   (format stream "NAVIGATION ~%")
-  (format stream "Location: ~S~%" (manofwar-location ship))
+  (format stream "~10S: ~S~%" 'Location (manofwar-location ship)) 
   (format stream "Course: ~S~%" (manofwar-course ship))
   (format stream "Speed: ~S~%" (manofwar-speed ship))
   (format stream "POWER MANAGEMENT~%")
@@ -542,6 +545,7 @@
 ;set it up to randomly rearrange letters also. how to set it up so it'll print this instead? include a conditional in to see if a certain
 ;function is t, if it is and the status has been hacked, then tell show-round to print this instead of the other. 
 (defun scrambled-status (ship)
+  (format stream "Round: ~S~%" *round*)
   (format t "Starship ~S~%" (random 1000000000000000))
   (format t "NAVIGATION ~%")
   (format t "Location: ~S~%" (random 1000000000000000))
@@ -683,7 +687,7 @@
 
 (defun get-command (ship target)
   (which-status ship)
-  (format t "[spd] [crs] [shld] [wpn] [hck] [drn]~%")
+  (format t "[spd] [crs] [shld] [wpn] [hck]~%")
   (format t "Enter your command: ")
   (let ((cmd (read)))
     (cond ((equal cmd 'spd) (set-speed ship))
@@ -695,10 +699,10 @@
 
 (defun random-command (ship target)
   (which-status ship)
-  (format t "[spd] [crs] [shld] [wpn] [hck] [drn]~%")
+  (format t "[spd] [crs] [shld] [wpn] [hck]~%")
   (format t "Enter your command: ")
   (setf choice (read))
-  (format t "~%Error, wrong!~%")
+  (format t "~%Error, wrong!~%") 
   (let ((pick (random 5)))
 ;error, because if pick is same as choice, then it won't do anything, and so the player won't even get a random action. I'm not sure if this is
 ;unbalanced or not. I'm not sure it is, the hacker essentially passes, there's a chance the enemy will pass too, but a higher chance they'll
@@ -709,3 +713,5 @@
           ((and (equal pick 3) (not (equal choice 'wpn))) (weapons ship target))
           ((and (equal pick 4) (not (equal choice 'hck))) (pick-hack ship target))))) 
 
+(defmacro while (test &rest forms)
+  `(loop (unless ,test (return)) ,@forms) )
