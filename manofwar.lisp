@@ -46,18 +46,18 @@
 ;add cooldown. 
   ;YIKES, why does changing a stat in one of these change it for all other instances of this variable. when it doesn't for other things. is this a problem
   ;with particle beam? I think it is. 
-  (weapons '((nuke (hull-dmg 50) (shield-dmg 30) (power 25) (range 4) (range-penalty -10))
-             (missiles (hull-dmg 4) (shield-dmg 1) (power 20) (range 3) (range-penalty -15))
-             (gauss (target-dmg 15) (hull-dmg 5) (power 20) (range 6) (range-penalty -20))
+  (weapons '((nuke (hull-dmg 50) (shield-dmg 30) (power 25) (range 3) (range-penalty -10))
+             (missiles (hull-dmg 4) (shield-dmg 1) (power 20) (range 2) (range-penalty -15))
+             (gauss (target-dmg 20) (hull-dmg 10) (power 20) (range 4) (range-penalty -20)) 
              ;particle beam will have additional power drain for each dmg point increase, and does extra damage. When its fired (damage-inc) is 
              ;added, and that adds to the 2 * inc to the power cost. Also needs to be changed so it is maintained, instead of a one-shot!
              ;problem, damage-inc will damage the hull also, even the hull-dmg is 0. 
-             (particle-beam (hull-dmg 0) (shield-dmg 30) (power 10) (range 100) (range-penalty 0)) 
+             (particle-beam (hull-dmg 0) (shield-dmg 30) (power 10) (range 10) (range-penalty 0)) 
              ;will have more drain the longer charged and do more damage. charge adds 5 * charge to dmg, and 2 * charge to power. 
              ;need to set it up so this doesn't fire automatically, but charges, and then you choose to fire it. Have ion cannon
              ;do damage to max-shield rather than do some power drain.
-             (ion-cannon (hull-dmg 0) (shield-dmg 15) (power-damage 15) (power 5) (range 4) (range-penalty -15)) ;damage power.max-power - 5 * charge
-             (cannons (hull-dmg 15) (shield-dmg 5) (power 5) (range 3) (range-penalty -20)))) 
+             (ion-cannon (hull-dmg 0) (shield-dmg 15) (power-damage 15) (power 5) (range 10) (range-penalty -15)) ;damage power.max-power - 5 * charge
+             (cannons (hull-dmg 15) (shield-dmg 5) (power 5) (range 2) (range-penalty -20)))) 
   ;particle-beam
   (damage-inc 0)
   ;ion-cannon
@@ -133,14 +133,18 @@
         (setf (manofwar-shield ship) (manofwar-max-shield ship))
       (setf (manofwar-shield ship) set))))
 
+;12-31 I've reordered this around so hopefully max-shield won't reset after being destroyed by gauss. 
 (defun check-shield (ship)
+  (when (> (manofwar-shield ship) (manofwar-max-shield ship))
+    (setf (manofwar-shield ship) (manofwar-max-shield ship)))
   (when (< (manofwar-shield ship) 0)
     (setf (manofwar-shield ship) 0)
     (setf (manofwar-max-shield ship) 0))
   (when (and (> (manofwar-shield ship) 0) (< (manofwar-shield ship) 100))
-    (setf (manofwar-max-shield ship) (manofwar-shield ship))) ;this will prevent the player from just recharging their shield everytime they take dmg
-  (when (> (manofwar-shield ship) (manofwar-max-shield ship))
-    (setf (manofwar-shield ship) (manofwar-max-shield ship)))) 
+    (setf (manofwar-max-shield ship) (manofwar-shield ship)))) ;this will prevent the player from just recharging their shield everytime they take dmg
+
+;  (when (> (manofwar-shield ship) (manofwar-max-shield ship))
+;    (setf (manofwar-shield ship) (manofwar-max-shield ship)))) 
 ;  (set-power ship))
 
 ;spd
@@ -222,9 +226,10 @@
       (take-damage target (+ (second (assoc 'shield-damage (cdr (assoc 'ion-cannon (manofwar-weapons ship)))))
                            (* 5 (manofwar-charge ship))))) 
     (progn
+      ;should this maybe use drain instead of max-power? 
       (setf (manofwar-max-power target) (- 100  (+ (second (assoc 'power-damage (cdr (assoc 'ion-cannon (manofwar-weapons ship)))))
                            (* 5 (manofwar-charge ship))))) 
-      (setf (manofwar-drain ship) (- (manofwar-drain ship)  (* 5 (manofwar-charge ship))))
+      (setf (manofwar-drain ship) (- (manofwar-drain ship)  (* 5 (manofwar-charge ship)))) 
       (setf (manofwar-charge ship) 0)
       (setf (manofwar-charging ship) nil) 
       (setf (manofwar-init ship) 0))) 
@@ -297,8 +302,9 @@
 (defun area-destroyed (ship area health) 
   (if (<= health 0) 
       (cond ((equal (manofwar-engine-location ship) area) (setf (manofwar-max-speed ship) 0))
-            ((equal (manofwar-shield-location ship) area) (setf (manofwar-max-shield ship) 0))
-            ((equal (manofwar-power-location ship) area) (setf (manofwar-max-power ship) 50)) ;THIS GETS RESET!
+            ((equal (manofwar-shield-location ship) area) (setf (manofwar-max-shield ship) 0)) 
+            ((equal (manofwar-power-location ship) area) (setf (manofwar-max-power ship) 0)) 
+ ;THIS GETS RESET! is that okay? 
             ((equal (manofwar-computer-location ship) area) (setf (manofwar-computer ship) nil))))) 
       
 
@@ -507,24 +513,17 @@
   (let ((dist (calculate-distance (manofwar-location ship1) (manofwar-location ship2))))
     (sqrt (+ (abs (car dist)) (abs (cdr dist))))))
 
-
 ;    (if (equal (abs (car dist)) (abs (cdr dist)))
  ;       (abs (car dist))
   ;    (abs (- (abs (car dist)) (abs (cdr dist))))) ))
 
 
-;this will return how many spaces away something is. so (1 2) (4 5) is a distance of (3 3)
-;and if you can move 2 spaces per turn, and set your coordinate to (4 5) then you'll move (1 1) every turn
-;how do I divide this up into spaces per turn. 
-(defun sum-coordinates (loc)
-  (+ (car loc) (cdr loc)))
-
 ;include a conditional here to check to see if distance is greater than the speed, and if it is move only by speed, if its less than then move by distance. problem is a negative distance will always be less than, so check for that
 ;YUCK. change to cond, and maybe set variables so I have less typing to do. 
 (defun move (ship)
   (let ((dist (calculate-distance (manofwar-location ship) (manofwar-course ship))))
-    (print dist)
-    (print (manofwar-location ship))
+;    (print dist)
+;    (print (manofwar-location ship))
 ;USING SPEED
     (if (and (>= (car dist) (manofwar-speed ship))
              (> (car dist) 0))
@@ -660,31 +659,37 @@
   ;let the player assign where each of their systems is.  
 ) 
  
-;find a less hard-code way to do this. UNFINISHED. 
+
 (defun set-system-locations (ship)
   (format t "Select where to place each system.~%")
   (format t "[bow] [port] [starboard] [stern]~%")
-  (format t "[eng] [pow] [shld] [wpn] [comp]~%")
-  (format t "Place the weapons system at: ")
-  (setf (manofwar-weapons-location ship) (read)))
+  (format t "Install computer at: ")
+  (setf (manofwar-computer-location ship) (read))
+  (format t "~%Install the engine at: ")
+  (setf (manofwar-engine-location ship) (read))
+  (format t "~%Install power unit at: ")
+  (setf (manofwar-power-location ship) (read))
+  (format t "~%Install shield generator at: ")
+  (setf (manofwar-shield-location ship) (read))) 
+
 
 ;rewrite this so it creates health for these. REWRITE THIS TO ALTER LOCATIONS
 (defun default-system-locations (ship)
   (setf (manofwar-computer-location ship) 'bow)
   (setf (manofwar-power-location ship) 'starboard)
   (setf (manofwar-engine-location ship) 'stern)
-  (setf (manofwar-shield-location ship) 'port)
-)
+  (setf (manofwar-shield-location ship) 'port)) 
 
-;unfinished. 
+
+;unfinished. REWRITE. make a list of unassigned systems. 
 (defun random-system-locations (ship)
   (let ((health 20)
         (rand (random 4)))
     (cond ((equal rand 0) (setf (manofwar-bow ship) `(computer . ,health)))
           ((equal rand 1) (setf (manofwar-bow ship) `(engine . ,health)))
           ((equal rand 2) (setf (manofwar-bow ship) `(power . ,health)))
-          ((equal rand 3) (setf (manofwar-bow ship) `(shield . ,health))))
-    ))
+          ((equal rand 3) (setf (manofwar-bow ship) `(shield . ,health))))    
+))
 
 (defun choose-game ()
   (backstory)
@@ -715,7 +720,7 @@
   (apply-hacks ship1) ;MAKE sure this works.  
   (update-ion ship1 ship2)
   (set-power ship1)
-  (check-shield ship1)
+  (check-shield ship1) ;this is what's keeping gauss from permanently knocking out the shields. 
   (if (manofwar-hacked ship1)
       (progn
        (setf (manofwar-hacked ship1) nil) ;this resets so that their next choice won't be random. 
@@ -781,5 +786,3 @@
 (defmacro while (test &rest forms)
   `(loop (unless ,test (return)) ,@forms) )
 
-
- 
