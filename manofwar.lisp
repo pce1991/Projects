@@ -32,6 +32,7 @@
   (power 100) ;when selecting power-system, depending on which they choose just set this to a number. 
   (drain 0)
   (engine '((max-speed 2) (acceleration 0))) ;should I include reverse thrusters? 
+  (max-speed 2)
   (speed 0)
   (course nil) ;this will be a coordinate I think. 
   (location nil)
@@ -47,7 +48,7 @@
   ;with particle beam? I think it is. 
   (weapons '((nuke (hull-dmg 50) (shield-dmg 30) (power 25) (range 4) (range-penalty -10))
              (missiles (hull-dmg 4) (shield-dmg 1) (power 20) (range 3) (range-penalty -15))
-             (gauss (hull-dmg 15) (shield-dmg 5) (power 20) (range 6) (range-penalty -20))
+             (gauss (target-dmg 15) (hull-dmg 5) (power 20) (range 6) (range-penalty -20))
              ;particle beam will have additional power drain for each dmg point increase, and does extra damage. When its fired (damage-inc) is 
              ;added, and that adds to the 2 * inc to the power cost. Also needs to be changed so it is maintained, instead of a one-shot!
              ;problem, damage-inc will damage the hull also, even the hull-dmg is 0. 
@@ -71,7 +72,12 @@
   (power-hacked 0) ;set this to a number of rounds that will decrement in the apply-hacks function. 
   (shield-hacked 0)
 ;  (drones '((drone1 nil) (drone2 nil)))
-  (weapons-location nil) ;put here something like (bow . 20), this shouldn't be shared between manofwars, but be careful. 
+  (bow 20) ;put something like (weapons . 20) here. 
+;  (lowbow nil)
+  (port 20)
+  (starboard 20)
+  (stern 20)
+;  (weapons-location nil) ;put here something like (bow . 20), this shouldn't be shared between manofwars, but be careful. 
   (shield-location nil)
   (engine-location nil)
   (power-location nil)
@@ -160,6 +166,7 @@
 
 ;COMMANDS weapon systems.  
 (defun weapons (ship target)
+  (format t "Target distance: ~S~%" (ship-distance ship target))
   (format t "~%Select which weapon to fire: ~%[1]nuke [2]missiles [3]particle-beam~%
 [4]gauss [5]ion-cannon [6]cannons~%")
   (if (manofwar-hacked ship)
@@ -176,34 +183,13 @@
            (setf mod (manofwar-damage-inc ship));sets mod to damage-inc
            (fire-weapon ship 'particle-beam target mod))
           ;set up gauss to target a specific location on the ship to disable the system. 
-          ((and (check-power ship 'gauss) (equal wpn 4)) (target-location target) (fire-weapon ship 'gauss target 0))
+          ((and (check-power ship 'gauss) (equal wpn 4)) (target-location ship target)) ;(fire-weapon ship 'gauss target 0))
           ((and (check-power ship 'ion-cannon) (equal wpn 5)) (format t "Enter how long to charge: ")
            (setf (manofwar-charging ship) t)
            (setf charge (read)) (charge-ion ship target *round* charge))
           ((and (check-power ship 'cannons) (equal wpn 6)) (fire-weapon ship 'cannons target 0))
           (t (format t "Error, not enough power or invalid entry. Enter selection again.~%") (weapons ship target))))
 
-(defun target-location (target)
-  (format t "Select target: bow[1]. lowbow[2]. port[3]. starboard[4]. stern[5]~%")
-  (let ((pick (read)))
-    (cond ((equal pick 1) (fire-gauss target 'bow))
-          ((equal pick 2) (fire-gauss target 'lowbow))
-          ((equal pick 3) (fire-gauss target 'port))
-          ((equal pick 4) (fire-gauss target 'starboard))
-          ((equal pick 5) (fire-gauss target 'stern))
-          (t (format t "Error, unspecificied target.~%") (target-location target)))))
-
-
-
-;reduce the damage by a certain amount if they have shields up. this might not be necessary, could just use damage-area in addition to
-;fire-weapon, because I want it to deal damage to the system and to the overall hull. 
-;make sure to use this when selecting weapons. 
-(defun fire-gauss (target area)
-   
-)
-
-;12-17-13 SOMETHING WRONG IS HAPPENING HERE, whenever one player uses the ion-cannon, but the other player also has their power drained. 
-;SOMEHOW one player activating ion-cannon has second player also activate it, immediately it seems. 
 
 ;start will be the current round, fire will be that round + 1 through 5. This is something that'll have to be called every round update. 
 ;HOW am I going to get init and fire so that I can continue to call this in the main method. I could always make the cost immediate, but I need this to fire it.  
@@ -253,6 +239,30 @@
 ) 
 ;      (setf (second (assoc 'charge (cdr (assoc 'ion-cannon (manofwar-weapons ship))))) 0)
 
+
+(defun target-location (ship target)
+  (format t "Select target: bow[1] port[2] starboard[3] stern[4]~%") 
+  (let ((pick (read)))
+    (cond ((equal pick 1) (fire-gauss ship target 'bow)) 
+;          ((equal pick 2) (fire-gauss ship target (manofwar-lowbow target)))
+          ((equal pick 2) (fire-gauss ship target 'port))
+          ((equal pick 3) (fire-gauss ship target 'starboard))
+          ((equal pick 4) (fire-gauss ship target 'stern))
+          (t (format t "Error, unspecificied target.~%") (target-location ship target)))))
+
+
+;reduce the damage by a certain amount if they have shields up. this might not be necessary, could just use damage-area in addition to
+;fire-weapon, because I want it to deal damage to the system and to the overall hull. 
+;make sure to use this when selecting weapons. 
+(defun fire-gauss (ship target area) 
+  ;make sure that this damages the hull as well as the targeted system. 
+  (let ((mod (* (- (ship-distance ship target) (second (assoc 'range (cdr (assoc 'gauss (manofwar-weapons ship))))))
+                (second (assoc 'range-penalty (cdr (assoc 'gauss (manofwar-weapons ship))))))))
+    (damage-area target area (damage-penalty (second (assoc 'target-dmg (cdr (assoc 'gauss (manofwar-weapons ship))))) mod)) ;there is no mod for gauss
+    ;just like in fire-weapon I need to decide if it does hull-dmg or shld-dmg. actually, I don't want to, I'd rather it pierce through shield
+    (take-damage target (damage-penalty (second (assoc 'hull-dmg (cdr (assoc 'gauss (manofwar-weapons ship))))) mod)) ))
+ 
+
 ;DESTRUCTION. returns t if hull is below 0. 
 (defun destruction (ship)
   (if (<= (manofwar-hull ship) 0)
@@ -265,23 +275,46 @@
       (setf (manofwar-shield ship) (- (manofwar-shield ship) damage))
     (setf (manofwar-hull ship) (- (manofwar-hull ship) damage)))) 
 
-(defun damage-area (ship area damage)
-  (when (> (manofwar-shield ship) )
-      (setf damage (- damage 10)))
-  (setf (second (assoc area (rest (manofwar-locations target)))) (- (second (assoc area (rest (manofwar-locations target)))) damage))
-  (area-destroyed (ship area)))
+;this is for the gauss cannon. REWRITE THIS, changed the structure. WARNING! damages both ships??? 12-31!!!
+(defun damage-area (ship area damage) ;area is going to be a quoted symbol. 
+  (when (> (manofwar-shield ship) 0)
+      (setf damage (- damage 10))) ;this is hardcoded in and gross, maybe I should write a penalty for gauss cannon. 
+  (cond ((equal area 'bow)  (setf (manofwar-bow ship) (- (manofwar-bow ship) damage)) 
+         (area-destroyed ship 'bow (manofwar-bow ship)))
+        ((equal area 'port) (setf (manofwar-port ship) (- (manofwar-port ship) damage)) 
+         (area-destroyed ship 'port (manofwar-port ship)))
+        ((equal area 'starboard) (setf (manofwar-starboard ship) (- (manofwar-starboard ship) damage)) 
+         (area-destroyed ship 'starboard (manofwar-starboard ship)))
+        ((equal area 'stern) (setf (manofwar-stern ship) (- (manofwar-stern ship) damage)))
+        (area-destroyed ship 'stern (manofwar-stern ship))))
+;  (area-destroyed ship area)) ;is this necessary? I think i just need it when the player picks their command. 
 
 ;set it up so only random weapons will go down if its a weapons system. power will only drop to 33. 
 ;Still need to implement for weapons. Don't know how I'll deactivate weapons though. Use activated-weapons in structure, and randomly
 ;assign them to certain symbols which will be checked for when selecting a weaopn, where it'll display disabled systems. 
-(defun area-destroyed (ship area)
-  (if (<= (second (assoc area (rest (manofwar-locations ship)))) 0)
-      (cond ((equal area (manofwar-power-location ship)) (setf (manofwar-max-power) 35))
-            ((equal area (manofwar-engine-location ship))
-             (setf (second (assoc 'max-speed (rest (assoc 'engine (manofwar-engine ship))))) 0))
-            ((equal area  (manofwar-computer-location ship))
-             (setf (manofwar-computer ship) nil)))))
+;HAVE THIS also print a message saying that an area has been destroyed.
+;WARNING! This won't work anymore because it can't take car of area, This needs to check locations. 
+(defun area-destroyed (ship area health) 
+  (if (<= health 0) 
+      (cond ((equal (manofwar-engine-location ship) area) (setf (manofwar-max-speed ship) 0))
+            ((equal (manofwar-shield-location ship) area) (setf (manofwar-max-shield ship) 0))
+            ((equal (manofwar-power-location ship) area) (setf (manofwar-max-power ship) 50)) ;THIS GETS RESET!
+            ((equal (manofwar-computer-location ship) area) (setf (manofwar-computer ship) nil))))) 
       
+
+
+(defun print-destroyed-systems (ship area) 
+  (if (<= area 0)
+      (format t "WARNING! ~S has suffered critical damage.~%" area))) ;this doesn't work. Should print out the weapon system located there. 
+
+;bad name? 
+(defun systems-status (ship)
+  (print-destroyed-systems ship (manofwar-bow ship))
+  (print-destroyed-systems ship (manofwar-stern ship))
+  (print-destroyed-systems ship (manofwar-starboard ship))
+  (print-destroyed-systems ship (manofwar-port ship))) 
+
+
 
 ;WEAPONS.
 (defun accuracy-roll (modifier)
@@ -301,7 +334,7 @@
 (defun fire-weapon (ship weapon target dmg-inc)
   (let* ((wpn (rest (assoc weapon (manofwar-weapons ship1))))
          (dist (ship-distance ship target))
-         (mod (* (- dist (second (assoc 'range wpn))) (second (assoc 'range-penalty wpn)))))
+         (mod (* (- dist (second (assoc 'range wpn))) (second (assoc 'range-penalty wpn))))) ;does this cause extra damage?
     (if (< (manofwar-shield target) 0)
       (let ((damage (+ dmg-inc (second (assoc 'hull-dmg wpn)))))
         (take-damage target (damage-penalty damage mod)))
@@ -357,7 +390,8 @@
   (setf (manofwar-scrambled target) t))
 
 ;Deactivate a system for two rounds. seems broken if its power, useless if its course, speed, or shield. 
-(defun null-system (target) 
+;have it so it'll deactivate a particular weapon, or perhaps a random 3. 
+(defun null-weapon (target)
   )
 
 ;this will make it so that whatever they enter for their pick, it'll choose something else. Maybe even numbers? 
@@ -365,9 +399,10 @@
   (format t "Enemy's next move will be random.~%")
   (setf (manofwar-hacked target) t))
   
+;this must be updated to work with the redefined structure. 
 (defun hack-location (target)
   (format t "Enter the system you'd like the location of.~% ")
-  (format t "[wpn] [shld] [comp] [eng] [pow]~%")
+  (format t "[shld] [comp] [eng] [pow]~%") 
   (let ((pick (read)))
     (cond ((equal pick 'wpn) (format t "The weapons system is located at ~S.~%" (manofwar-weapons-location target)))
           ((equal pick 'shld) (format t "The shield generator is located at ~S.~%" (manofwar-shield-location target)))
@@ -428,7 +463,7 @@
         (format t "Welcome lord ~S.~%" (manofwar-captain ship))
         (hack-info ship target) )
     (progn
-      (format t "Select system to hack: ")
+      (format t "Select system to hack: ") ;print out options? 
       (let ((pick (read)))
         (cond ((equal pick 'power) (hack-power target))
               ((equal pick 'readout) (hack-status target))
@@ -464,11 +499,18 @@
 ;I should divide the car by the cdr to get a single number. division won't work cause then a distance of 3 3
 ;means it'd be recorded as a distance of 1, when it should be 3. what about 10 3, is that only 3 away? that 
 ;isn't only 3 away. subtract it? get the absolute value. 7 spaces away is reasonable for 10 3 distance. 
-(defun ship-distance (ship1 ship2)
+;12-31 Not sure how well this works, could use some tweaking. Seems to say you're 6 away most of the time. 
+;if they're top and bottom instead of corners, distance becomes much greater. They can be further away and be 8 away, but
+;top and bottom is 10 away even if they're nearly on the same column. 3 . 2 and 12 . 13 records a distance of 2. SO WRONG
+;(sqrt (- x2 x1) + (- y2 y1))
+(defun ship-distance (ship1 ship2) 
   (let ((dist (calculate-distance (manofwar-location ship1) (manofwar-location ship2))))
-    (if (equal (abs (car dist)) (abs (cdr dist)))
-        (abs (car dist))
-      (abs (- (abs (car dist)) (abs (cdr dist))))) ))
+    (sqrt (+ (abs (car dist)) (abs (cdr dist))))))
+
+
+;    (if (equal (abs (car dist)) (abs (cdr dist)))
+ ;       (abs (car dist))
+  ;    (abs (- (abs (car dist)) (abs (cdr dist))))) ))
 
 
 ;this will return how many spaces away something is. so (1 2) (4 5) is a distance of (3 3)
@@ -532,6 +574,7 @@
 (defun print-status (ship stream depth) ;ignore depth, but its required for some reason. 
   (format stream "Round: ~S~%" *round*)
   (format stream "Starship ~20S Captain: ~S~%" (manofwar-name ship) (manofwar-captain ship))
+  (systems-status ship)
   (format stream "NAVIGATION ~%")
   (format stream "~10S: ~S~%" 'Location (manofwar-location ship)) 
   (format stream "Course: ~S~%" (manofwar-course ship))
@@ -547,6 +590,7 @@
 (defun scrambled-status (ship)
   (format stream "Round: ~S~%" *round*)
   (format t "Starship ~S~%" (random 1000000000000000))
+  (systems-status ship)
   (format t "NAVIGATION ~%")
   (format t "Location: ~S~%" (random 1000000000000000))
   (format t "Course: ~S~%" (random 1000000000000000))
@@ -573,14 +617,16 @@
                              :speed 2
                              :hull 100
                              :shield 0)) 
+  (default-system-locations ship1)
   (setf ship2 (make-manofwar :name 'player2
                              :location (second locations)
                              :course (second locations)
                              :speed 2
                              :hull 100
                              :shield 0)) 
+  (default-system-locations ship2)
   (display-map map ship1 ship2)
-  (show-round map ship1 ship2 0))
+  (show-round map ship1 ship2 0)) 
  
 
 (defun random-starting-locations ()
@@ -617,16 +663,34 @@
 ;find a less hard-code way to do this. UNFINISHED. 
 (defun set-system-locations (ship)
   (format t "Select where to place each system.~%")
-  (format t "[bow] [lowbow] [starboard] [stern]~%")
+  (format t "[bow] [port] [starboard] [stern]~%")
   (format t "[eng] [pow] [shld] [wpn] [comp]~%")
   (format t "Place the weapons system at: ")
   (setf (manofwar-weapons-location ship) (read)))
+
+;rewrite this so it creates health for these. REWRITE THIS TO ALTER LOCATIONS
+(defun default-system-locations (ship)
+  (setf (manofwar-computer-location ship) 'bow)
+  (setf (manofwar-power-location ship) 'starboard)
+  (setf (manofwar-engine-location ship) 'stern)
+  (setf (manofwar-shield-location ship) 'port)
+)
+
+;unfinished. 
+(defun random-system-locations (ship)
+  (let ((health 20)
+        (rand (random 4)))
+    (cond ((equal rand 0) (setf (manofwar-bow ship) `(computer . ,health)))
+          ((equal rand 1) (setf (manofwar-bow ship) `(engine . ,health)))
+          ((equal rand 2) (setf (manofwar-bow ship) `(power . ,health)))
+          ((equal rand 3) (setf (manofwar-bow ship) `(shield . ,health))))
+    ))
 
 (defun choose-game ()
   (backstory)
   (format t "~%Would you like to customize your ship before departing? (y / n)" )
   (let ((choice (read)))
-    (if (equal choice 'n)
+    (if (equal choice 'n) 
         (start-game)
       (custom-game))))
   
@@ -685,6 +749,7 @@
   (show-round map ship1 ship2 count))
              
 
+;this is where it'll check system health, just like it checks weapon power-cost. 
 (defun get-command (ship target)
   (which-status ship)
   (format t "[spd] [crs] [shld] [wpn] [hck]~%")
@@ -715,3 +780,6 @@
 
 (defmacro while (test &rest forms)
   `(loop (unless ,test (return)) ,@forms) )
+
+
+ 
