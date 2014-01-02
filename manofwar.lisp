@@ -46,9 +46,9 @@
 ;add cooldown. 
   ;YIKES, why does changing a stat in one of these change it for all other instances of this variable. when it doesn't for other things. is this a problem
   ;with particle beam? I think it is. 
-  (weapons '((nuke (hull-dmg 50) (shield-dmg 30) (power 25) (range 3) (range-penalty -10))
+  (weapons '((nuke (hull-dmg 50) (shield-dmg 30) (power 25) (range 2) (range-penalty -10))
              (missiles (hull-dmg 4) (shield-dmg 1) (power 20) (range 2) (range-penalty -15))
-             (gauss (target-dmg 20) (hull-dmg 10) (power 20) (range 4) (range-penalty -20)) 
+             (gauss (target-dmg 20) (hull-dmg 10) (power 20) (range 3) (range-penalty -20)) 
              ;particle beam will have additional power drain for each dmg point increase, and does extra damage. When its fired (damage-inc) is 
              ;added, and that adds to the 2 * inc to the power cost. Also needs to be changed so it is maintained, instead of a one-shot!
              ;problem, damage-inc will damage the hull also, even the hull-dmg is 0. 
@@ -82,20 +82,8 @@
   (engine-location nil)
   (power-location nil)
   (computer-location nil) ;make sure that if this is destroyed all hacks in process stop. 
-)
-;  (drones-location nil)
-  ;5 sections, engine goes in oneplace, computer/you somewhere, power, weapons, shield. give 20 health each. 
-;  (layout '((bow 20) (lowbow 20) (port 20) (starboard 20) (stern 20)))) 
-
-;each drone has a type. It can be espionage: spy on enemies settings. sabotage: disrupt and disable systems
-;deceive: mess with systems to show false data. attack: these will follow the ship and attack it. 
-(defstruct drone 
-  (type nil)
-  (location nil)
-  (move-pattern nil) ;this will be set to stationary, follow, evade, and path.
-  (range 0)
-  (hull 10)
-  (speed 1)
+  ;ADD drones here! I think they should be primarily defensive. I think they might also work as a distraction. so that maybe
+  ;the enemy sees two players and might pick the wrong target. I'll need to implement target selection too. 
 )
 
 (defun christen (ship)
@@ -157,6 +145,11 @@
         (setf spd 2))
     (setf (manofwar-speed ship) spd)
     (set-power ship)))
+
+(defun check-speed (ship)
+  (if (< (manofwar-max-speed ship)
+         (manofwar-speed ship))
+      (setf (manofwar-speed ship) (manofwar-max-speed ship))))
 
 ;this should be changed so that you can't enter a wrong course. 
 ;crs. Change it to put parens around coordinates automatically.
@@ -290,8 +283,8 @@
          (area-destroyed ship 'port (manofwar-port ship)))
         ((equal area 'starboard) (setf (manofwar-starboard ship) (- (manofwar-starboard ship) damage)) 
          (area-destroyed ship 'starboard (manofwar-starboard ship)))
-        ((equal area 'stern) (setf (manofwar-stern ship) (- (manofwar-stern ship) damage)))
-        (area-destroyed ship 'stern (manofwar-stern ship))))
+        ((equal area 'stern) (setf (manofwar-stern ship) (- (manofwar-stern ship) damage))
+        (area-destroyed ship 'stern (manofwar-stern ship)))))
 ;  (area-destroyed ship area)) ;is this necessary? I think i just need it when the player picks their command. 
 
 ;set it up so only random weapons will go down if its a weapons system. power will only drop to 33. 
@@ -309,16 +302,16 @@
       
 
 
-(defun print-destroyed-systems (ship area) 
-  (if (<= area 0)
+(defun print-destroyed-systems (ship area health) 
+  (if (<= health 0)
       (format t "WARNING! ~S has suffered critical damage.~%" area))) ;this doesn't work. Should print out the weapon system located there. 
 
 ;bad name? 
 (defun systems-status (ship)
-  (print-destroyed-systems ship (manofwar-bow ship))
-  (print-destroyed-systems ship (manofwar-stern ship))
-  (print-destroyed-systems ship (manofwar-starboard ship))
-  (print-destroyed-systems ship (manofwar-port ship))) 
+  (print-destroyed-systems ship 'bow (manofwar-bow ship))
+  (print-destroyed-systems ship 'stern (manofwar-stern ship))
+  (print-destroyed-systems ship 'starboard (manofwar-starboard ship))
+  (print-destroyed-systems ship 'port (manofwar-port ship))) 
 
 
 
@@ -384,7 +377,7 @@
 
 ;this gives access to the player to hack other systems. Maybe this takes in a ship and target instead, and changes access there, then
 ;every round it checks (manofwar-access ship1) and if t, then it allows you to pick a hack. If not it says "get-info." One you have info
-;it should print it out every round next to your info. 
+;it should print it out every round next to your info.
 (defun hack-info (ship target)
   (format t "Here is the enemies status: ~%")
   (print-status target t 0)
@@ -481,8 +474,13 @@
               (t (format t "Error. Uncomputable entry.~%") (pick-hack ship target)))))))
 
 ;should it be setup so that these stats revert after the rounds are expired? otherwise players will just run out of juice. 
-(defun apply-hacks (ship)
+(defun apply-hacks (ship enemy)
   ;this is to reset power drain when the hack goes away. This will cause an error if there is another drain going on like charging ion. do I need this for shield? 
+  ;this should break off hacking if the enemy's computer has been destroyed. 
+  (if (not (manofwar-computer enemy))
+      (progn
+        (setf (manofwar-power-hacked ship) 0)
+        (setf (manofwar-shield-hacked ship) 0)))
   (when (zerop (manofwar-power-hacked ship))
     (setf (manofwar-drain ship) 0))
   (when (> (manofwar-power-hacked ship) 0) 
@@ -491,6 +489,7 @@
   (when (> (manofwar-shield-hacked ship) 0)
          (setf (manofwar-max-shield ship) (- (manofwar-max-shield ship) 15))
          (setf (manofwar-shield-hacked ship) (1- (manofwar-shield-hacked ship)))))
+
   
 
 ;------------------------------NAVIGATION-------------------------------
@@ -717,10 +716,11 @@
   (move-ships ship1 ship2)
   (display-map map ship1 ship2)
   (format t "~%=====================================================~%")
-  (apply-hacks ship1) ;MAKE sure this works.  
+  (apply-hacks ship1 ship2) ;MAKE sure this works.  
   (update-ion ship1 ship2)
   (set-power ship1)
   (check-shield ship1) ;this is what's keeping gauss from permanently knocking out the shields. 
+  (check-speed ship1)
   (if (manofwar-hacked ship1)
       (progn
        (setf (manofwar-hacked ship1) nil) ;this resets so that their next choice won't be random. 
@@ -731,13 +731,13 @@
   (setf (manofwar-max-power ship1) 100) ;this is to ensure that ion-cannon damage doesn't carry over into other rounds. 
   (when (destruction ship2) 
     (format t "~S was destroyed.GAME OVER. The ~S drifts victorious!" (manofwar-name ship2) (manofwar-name ship1))
-    (break));PROBLEM this won't actually end the game if second player dies though. 
- ;might create general restore-hack function. 
+    (break));PROBLEM this won't actually end the game if second player dies though.  
   (format t "~%=====================================================~%")
-  (apply-hacks ship2) 
+  (apply-hacks ship2 ship1) 
   (update-ion ship2 ship1)
   (set-power ship2)
   (check-shield ship2)
+  (check-speed ship2)
   (if (manofwar-hacked ship2)
       (progn
        (setf (manofwar-hacked ship2) nil)
@@ -783,6 +783,5 @@
           ((and (equal pick 3) (not (equal choice 'wpn))) (weapons ship target))
           ((and (equal pick 4) (not (equal choice 'hck))) (pick-hack ship target))))) 
 
-(defmacro while (test &rest forms)
-  `(loop (unless ,test (return)) ,@forms) )
+;use sleep function to improve the flow of game, give player time to review a hack, etcetera. 
 
