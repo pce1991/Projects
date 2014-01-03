@@ -1,5 +1,7 @@
 ;MAN-OF-WAR
 
+;Call (start-game) to begin a match. Currently only supports two human players. 
+
 (defparameter *round* 0) ;write a delayed fire function that executes once round reaches a certain point. 
 
 (defun make-map ()
