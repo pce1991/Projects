@@ -5,7 +5,7 @@
 ;import stuff from onlisp? so far I'm only using explode, but I'm sure these might be helpful. do-tuples/o might be useful. 
 (load "~/Projects/onlisp.lisp")
 (load "~/Projects/patmatch-Novak.lisp") ;this will be used in conversation system. 
-
+ 
 ;import a dictionary so I won't have to enter synonyms manually, it'll just look it up in the dictionary. will also aid conversation. 
 
 ;GLOBAL VARIABLES AND STRUCTURES 
@@ -33,11 +33,11 @@
                        (a movie theatre still as popular as before. perhaps more so because of the need for escapism. but its not so easy
                           to forget your worries as its just as popular with the occupying soldiers as with the the occupied.)
                        (front (a couple soldiers stand in front speaking in German while some young girls chat and a family walks away from
-                                 the building down the street.))
+                                 the theatre.))
                        (lobby )
-                       (theatre-1 )
-                       (theatre-2 )
-                       (theatre-3 ))
+                       (theatre-un )
+                       (theatre-deux )
+                       (theatre-trois ))
                       (church 
                        (a bleak church in sullen city. here less reverance is paid than before but more prayers are muttered wept or cried.)
                        (sanctuary (there are a few other people in the pews. some with rosaries and some facing a figure of christ or his mother.
@@ -48,19 +48,38 @@
                        ()
                        )
                       (nightclub 
-                       )
+                       (for a while these places were really in a vicegrip by the local authority. The music was condemned as undisciplined kike
+                         nigger jungle music. but turns out the german soldiers love jazz as much as everyone else so the government is forced
+                         to appease them but also seem strong by making ridiculous decrees that music not exceed a certain tempo, and sycopation
+                         be limited to only 10 percent of a song.)
+                       (bar (you sit at the bar with the stage to your left.))
+                       (dining-area (your seat faces stage where you can see the band bouncing as the music is enjoyed by all without animosity.))
+                       (bathroom (in the bathroom you can here the muffled music.))                       )
                       (park
                        )
+                      (restaurant 
+                       )
+                      
+                      ;include La Place Blanche café, reserved for germans exclusively. experiment in preventing access to a place. you can only stand
+                      ;in front of it. 
                        
                       
                       ;treat this as an area instead of a location. the location will stay and represent which node you are at. 
                       (streets ;this is using a system where all streets are considered one unit, and you just travel between nodes on it. 
                        (a typically oppressed though still lovely street of paris. The boast of the nazis hang red and black over buildings.
                           their harsh language is strewn across buildings while commands bark from posters.)
-                       (apartment (cafe 2) (movie-theatre 3) (eiffel-tower 10))
-                       (cafe (apartment 2) (movie-theatre 2) (eifel-tower 8))
-                       (movie-theatre (apartment 3) (cafe 2) (eiffel-twoer 6))
-                       (eiffel-tower (apartment 10) (cafe 8) (movie-theatre 6)))
+                       (home (the street is never crowded so when you emerge out of your building you feel yourself stand out. 
+                                       Something you never minded before but now you feel yourself check to the left and right for any hostile element.)
+                                       (cafe south 2) (movie-theatre south-west 3) (eiffel-tower west 10))
+;WRITE DESCRIPTIONS FOR EACH STREET
+                       (cafe 
+                        (home north 2) (movie-theatre west 2) (eifel-tower west 8))
+                       (movie-theatre (apartment north-east 3) (cafe east 2) (eiffel-twoer west 6))
+                       (eiffel-tower (apartment east 10) (cafe east 8) (movie-theatre east 6))
+                       (movie-theatre ())
+                       (chruch ())
+                       (hotel ())
+                       (park ()))
                       ;I might also want to make a street system where its based on individual roads, which might be more interesting,
                       ;but runs the risk of being too complicated or getting in the way of playing. 
        
@@ -72,6 +91,21 @@
                        (south ?x)
                        (east ?x)
                        (west ?x))))
+ 
+;necessary?
+(defparameter *location-synonyms* nil)
+
+;get-paths is called before the character is created. 
+(defun get-area-synonyms ()
+  (let ((lst nil))
+    (dolist (i (get-paths))
+      (cons (second i) lst))
+    lst))
+
+;build this out of the path descriptions. Sometimes I might want to call something different in the path description than in the code. 
+(defparameter *area-synonyms* (get-area-synonyms)) 
+
+  
 
 ;1-2-13
 ;this might work if the main map gets too big. I could keep this global variable which will contain things like the locations in
@@ -126,12 +160,13 @@
                                                        (and beside it stands a photo of your parents.) 
                                                        bedroom home)
                                          (newspaper (everyone knows the press is compromised and that this is particualry bad 
-                                                              even for propaganda. However it probably looked suspicous to quit reading it.
+                                                              even for propaganda. However it would probably look suspicous to quit reading it.
                                                               and as of yet you havent worked up the courage to buy one of those underground
-                                                              papers youve heard about. listening the bbc broadcast each night like everyone
+                                                              papers youve heard about. listening to the bbc broadcast each night like everyone
                                                               has been enough for you so far.)
                                                     (Over on the table is a newspaper.)
-                                                    bedroom home)))))
+                                                    bedroom home)))
+                                    )) 
 
 ;pattern matching? this causes a problem when there are two similar objects like the photo of the girl and of your parents. otherwise it should just be
 ;able to find the word the player input and then display that.  
@@ -167,7 +202,7 @@
                                                papers youve heard about. listening the bbc broadcast each night like everyone
                                                has been enough for you so far.)
                                      (ontop of the dining table)
-                                     bedroom home)))
+                                     bedroom home))) 
    
    
 ;these items won't have general descriptions I'm assuming, just description of contents.                                   
@@ -183,19 +218,20 @@
 (defstruct character
   (name nil)
   (appearance nil)
+  (location-description nil)
   (location nil)
   (inventory nil)
   (loyalty nil)
   (undercover nil)
   (anxiety 0)
-  (suspicion 0))
+  (suspicion 0)) 
 
 (defparameter *player* (make-character
                         :name '(Jacques Gallion)
                         :appearance '(your standard frenchman though strungout by the occupation)
                         :location '(bedroom home))) 
 
-(defparameter *commands* '(explore inspect walk pickup use talk open shoot consider)) ;consider? this might give you clues when reading memos or something.
+(defparameter *commands* '(save explore inspect walk pickup use talk open shoot consider)) ;consider? this might give you clues when reading memos or something.
 ;does open work on doors and containers. does pickup work like inspect on items that can't be inventoried. 
 
 (defparameter *command-synonyms* '((explore (look-around lookaround look search investigate))
@@ -213,7 +249,7 @@
         (setf lst (append j lst))))
     lst)) 
 
-(defparameter *synonyms-list* (synonyms-list1))
+(defparameter *synonyms-list* (synonyms-list1)) 
 
 
 
@@ -221,9 +257,16 @@
 (defparameter *inventory* ())
 
 (defparameter *characters* `(,(make-character
-                              :name 'barista ;proprieter. Create synonyms for each character. Or just for occupations? 
-                              :appearance '(a middle-aged man stands behind the bar)
-                              :location '(main-area cafe))))
+                               :name 'barista ;proprieter. Create synonyms for each character. Or just for occupations? 
+                               :appearance '(a middle-aged man with a sullen look on his face.)
+                               :location-description '(a middle-aged man stands behind the bar.) ;this can come before or after appearance, so write two functions with a way to determ           
+                               :location '(main-area cafe))
+                             ,(make-character
+                               :name '(Jean Augustin)
+                               :appearance '(a man not that much older than you. he appears weathered and this experience seems the source of his confidence.
+                                               he seems to know what is required. and sure in what he is capable of.)
+                               :location-description '(he sits at a table looking over documents.)
+                               :location '(basement cafe))))
 
 
 (defparameter *days-since-occupation* 187) ;I don't actually know how many days it should be. maybe the game should have chapters that are years or seasons
@@ -320,8 +363,37 @@
 ;change this so that the street is randomized each visit. might have a patrol coming through, might be merchants (though this should be more static)
 ;and pedestrians. a character you recognize might even appear (which could be a problem if they're an enemy who recongizes you). 
 (defun describe-street ()
-  (print-description (second (assoc 'streets *map*))))
-      
+  (second (assoc 'streets *map*)))
+       
+(defun get-street-routes ()
+  (cdr (cdr (assoc (current-location) (cdr (assoc 'streets *map*))))))
+
+;this is sloppy. in the future make it so everything in one direction is printed, and in in order of distance. 
+(defun show-route (route)
+  `(the ,(car route) is ,(third route) kilometers ,(second route)))
+
+(defun modify-street () )
+
+;write a function so the user can input a direction command and it'll go to the closest destination in that direction. 
+(defun closest-along-route (route)
+  (let ((min 100))
+    (let ((closest nil))
+      (dolist (i (get-street-routes))
+        (when (and (equal (second i) route) 
+                   (< (third i) min))
+            (setf min (third i))
+            (setf closest (car i))))
+      closest)))  
+ 
+;have the player enter something like go east, walk north. this will create a list of possible directions they could go, then the above function will
+;find where the closes location along that route is. that's what will be passed to object. player won't be able to just say north, east, etcetera.   
+(defun directions-list ()
+  (let ((lst nil))
+    (dolist (i (get-street-routes))
+      (push (second i) lst))
+    lst)) 
+
+
 ;PATHS
 
 (defun get-paths ()
@@ -376,8 +448,8 @@
  ; `(if ,condition (progn ,@body)))
 ;(when-cond ((test1 do1)) ((test2 do2))) this will work where multiple things might be true, and if they are they should be done. 
 ;so clauses will be a list ((t1) (d2))
-(defmacro when-cond (clauses))
-  
+;(defmacro when-cond (clauses) 
+;)  
 
 ;quite inelegant. should this also list the objects? 
 (defun list-area ()
@@ -385,7 +457,9 @@
     (when (describe-area)
       (push (describe-area) lst))
     (when (on-street)
-      (push (describe-street) lst))
+      (push (describe-street) lst)
+      (dolist (i (get-street-routes))
+        (push (show-route i) lst)))
     (when (show-characters)
       (push (show-characters) lst))
     (when (show-objects)
@@ -454,7 +528,9 @@
 (defun roll-shot (ammo)
   (random (1+ ammo)))
 
-      
+;EVENTS
+;events will happen on the street, will have their own description added, and may add characters to the area. likelihood of certain events increases based on time of day, 
+;length of occupation, and length of distance being traveled. 
 
 
 ;SYSTEM
@@ -471,7 +547,8 @@
         (let ((obj nil))
           (cond ((find-area read) (setf obj (find-area read)))
                 ((find-location read) (setf obj (find-location read)))
-                ((find-object read) (setf obj (find-object read))))
+                ((find-object read) (setf obj (find-object read)))
+                ((find-direction read) (setf obj (closest-along-route (find-direction read)))))
           (do-command cmd obj)))
       (play)))) 
   
@@ -488,6 +565,8 @@
               (member i (list-character-names))
               (member i (get-object-names))
               (member i (character-inventory *player*))
+              (member i (directions-list)) 
+              
               ;write one for paths. opening a door should be the same as going to that area, so list-area handles things like go to bathroom, but not
               ;open the door to the bathroom. 
               (member i (list-locations))
@@ -516,12 +595,18 @@
 (defun find-location (parsed-phrase)
   (find-in-phrase parsed-phrase (list-locations)))
 
+(defun find-direction (parsed-phrase)
+  (find-in-phrase parsed-phrase (directions-list)))
+
 (defun find-object (parsed-phrase)
   (find-in-phrase parsed-phrase (get-object-names)))
 
 (defun do-command (cmd obj)
   (cond ((and (not (on-street)) (equal cmd 'walk)) (change-area1 obj))
+        ((and (not (on-street)) (null cmd) (member obj (list-areas))) (change-area1 obj))
         ((and (on-street) (equal cmd 'walk)) (change-location1 obj))
+        ((and (on-street) (null cmd)) (change-location1 obj)) ;this is bad cause there's no way to check
+        
         ((equal cmd 'inspect) (inspect-object obj)))) ;I'm not sure that I want on-street to handle the descriptive part. 
 
 ;this will prompt the player for a line, turn it into a list of chars, go through the whole list and as long as a space is not encountered
@@ -546,9 +631,9 @@
 ;strutcture. So should I write other variables, or just add to that strucure. I'll need to include missions that have been
 ;completed, characters that have died, and also changes to the environment (such as cutting cable of eiffel tower). 
 
+
 ;load function, will read from a document. 
 
-;remove parens. 
 
 ;UTILITY FUNCTIONS
 ;========================================================================================
@@ -574,6 +659,50 @@
                  'string))
   (fresh-line))
 
+
+;CREATION FUNCTIONS this is how a user can use the engine.  
+;=================================================================================================================
+(defun create-location ()
+  (push (list (name-location) (create-area)) *map*)) ;I need to make sure that this saves the map. 
+  
+(defun name-location ()
+  (read)) 
+
+(defun write-location ()
+  (read-list))
+
+;these might be useful to trigger after certain events happen.
+(defun rewrite-location (location)
+  (setf (car (cdr (assoc location *map*))) (read-list)))
+
+;write this so you can create multiple areas within a location. 
+(defun create-area ()
+  (let ((area (list (name-area) (write-area))))
+    (let ((continue nil))
+      (format t "would you like to add another area to this location? y/n ")
+      (setf continue (read))
+      (if (equal continue 'y)
+          (while (equal continue 'y)
+            (append area (list (name-area) (write-area)))
+            (format t "would you like to add add another area to this location? y/n ")
+            (setf continue (read))))
+    area)))
+
+;this might be useful to use for hidden areas of the game. they won't be in the map file until something is triggered, and then this add area will be called. 
+(defun add-area (location name description)
+  (push (list name description) (cdr (assoc location *map*))))
+
+
+(defun name-area ()
+  (read))
+
+(defun write-area ()
+  (read-list)) 
+
+(defun rewrite-area (location area)
+  (setf (second (cdr (assoc area (cdr (assoc location *map*))))) (read-list)))
+
+               
 
 ;write some general functions that'll give me a particular part of a list such as *map*. THis'll help clean up the code
 ;and make this more of an engine than a particular game, because it has to be easy to read if its gonna be reused. 
