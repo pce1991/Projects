@@ -10,6 +10,8 @@
 
 ;GLOBAL VARIABLES AND STRUCTURES 
 ;======================================================================================
+
+;these descriptions are too much about history and thought, not enough about description of actual location.
 (defparameter *map* '((home
                        (your small apartment in conquered Paris. No longer as comforting as home should be. more like a trap than a dwelling. 
                              they will know right where to find you.)
@@ -50,11 +52,11 @@
                       (nightclub 
                        (for a while these places were really in a vicegrip by the local authority. The music was condemned as undisciplined kike
                          nigger jungle music. but turns out the german soldiers love jazz as much as everyone else so the government is forced
-                         to appease them but also seem strong by making ridiculous decrees that music not exceed a certain tempo, and sycopation
+                         to appease them but also seem strong by making ridiculous decrees that music not exceed a certain tempo and sycopation
                          be limited to only 10 percent of a song.)
                        (bar (you sit at the bar with the stage to your left.))
                        (dining-area (your seat faces stage where you can see the band bouncing as the music is enjoyed by all without animosity.))
-                       (bathroom (in the bathroom you can here the muffled music.))                       )
+                       (bathroom (in the bathroom you can here the muffled music.)) )                      
                       (park
                        )
                       (restaurant 
@@ -72,14 +74,18 @@
                                        Something you never minded before but now you feel yourself check to the left and right for any hostile element.)
                                        (cafe south 2) (movie-theatre south-west 3) (eiffel-tower west 10))
 ;WRITE DESCRIPTIONS FOR EACH STREET
-                       (cafe 
+                       (cafe (a few german soldiers sit outside the cafe enjoying weather that should be enjoyed by the french too nervous
+                                to sit near the boisterous intruders.)
                         (home north 2) (movie-theatre west 2) (eifel-tower west 8))
                        (movie-theatre (apartment north-east 3) (cafe east 2) (eiffel-twoer west 6))
                        (eiffel-tower (apartment east 10) (cafe east 8) (movie-theatre east 6))
                        (movie-theatre ())
+                       (nightclub ())
                        (chruch ())
                        (hotel ())
-                       (park ()))
+                       (park ())
+                       (restaurant ())
+                             
                       ;I might also want to make a street system where its based on individual roads, which might be more interesting,
                       ;but runs the risk of being too complicated or getting in the way of playing. 
        
@@ -90,7 +96,7 @@
                        (north ?x) ;set these to values based on where you're leaving from. 
                        (south ?x)
                        (east ?x)
-                       (west ?x))))
+                       (west ?x)))))
  
 ;necessary?
 (defparameter *location-synonyms* nil)
@@ -148,25 +154,30 @@
                                     (top
                                      (elevator-cable . cut))))) ;the . represents an action that can be performed. 
 
+;the three nil values are respectively, can it be equipped, is it hidden, and does it have functions associated with it? 
 (defparameter *object-locations* '((home (bedroom 
                                          (girl-photo (you wonder what happened to her.
                                                             its been a while since you last saw her so you have you suspicions.)
                                                        (Ontop of your dresser stands a picture of a girl you once knew) ;this is a descrition to be used. 
-                                                       bedroom home) ;this is how to find where to place it. might change to lists if its in
+                                                       bedroom home nil nil nil) ;this is how to find where to place it. might change to lists if its in
                                                       ;multiple places. 
                                          (family-photo (you stare at the photo of your deceased parents who loved you and wanted you to live
                                                             and be happy. two people who could not have imagined this happening. 
                                                             just like the rest of you. Except lucky enough to have never been proven wrong.)
                                                        (and beside it stands a photo of your parents.) 
-                                                       bedroom home)
+                                                       bedroom home nil nil nil)
                                          (newspaper (everyone knows the press is compromised and that this is particualry bad 
                                                               even for propaganda. However it would probably look suspicous to quit reading it.
                                                               and as of yet you havent worked up the courage to buy one of those underground
                                                               papers youve heard about. listening to the bbc broadcast each night like everyone
                                                               has been enough for you so far.)
                                                     (Over on the table is a newspaper.)
-                                                    bedroom home)))
-                                    )) 
+                                                    bedroom home nil nil nil))))) 
+;this checks to see if an item can be equipped. 
+(defun equipp () )
+
+;this checks to see if an item is in a container or otherwise hidden. 
+(defun hiddenp () )
 
 ;pattern matching? this causes a problem when there are two similar objects like the photo of the girl and of your parents. otherwise it should just be
 ;able to find the word the player input and then display that.  
@@ -176,33 +187,36 @@
 ;these are all the objects that you can pickup.
 (defparameter *items* nil)
 
+;containers can be inspected for a description, or opened for a list of contents. 
 (defparameter *container-locations* '((home (bedroom
                                              (dresser (your dresser. Containing the bible you used to consider quaint. something feels more 
                                                             relavant and comforting about it now. But no less dubious. 
                                                             next to it rests the  pistol you never thought would be needed.
                                                             then there is your sparse and innocent journal which you hope they dont find.)
-                                                      (bible pistol) bedroom home))))) 
+                                                      (bible pistol journal) bedroom home))))) 
                                          
                                  
                         
 ;different way of doing of objects. I think I should combine this with the organization by location as above.  
+;perhaps if objects have a function then they have that bit of code associated with them, so pistol might have (fire), and if its in inventory then
+;you funcall it. objects have a nil associated with them if they're fixed in place, and t if they can be picked up and put in inventory. 
 (defparameter *objects* '((friend-photo (you wonder what happened to them.
                                         its been so long since you last saw them so you have you suspicions.)
                                         (ontop of the dresser) ;this is a descrition to be used. 
-                                        bedroom home) ;this is how to find where to place it. might change to lists if its in
+                                        bedroom home nil) ;this is how to find where to place it. might change to lists if its in
                                                       ;multiple places. 
                           (family-photo (you stare at the photo of your deceased parents who loved you and wanted you to live
                                              and be happy. two people who could not have imagined this happening. 
                                              just like the rest of you. Except lucky enough to have never been proven wrong.)
                                         (ontop of the dresser) 
-                                        bedroom home)
+                                        bedroom home nil)
                           (newspaper (everyone knows the press is compromised and that this is particualry bad 
                                                even for propaganda. However it probably looked suspicous to quit reading it.
                                                and as of yet you havent worked up the courage to buy one of those underground
                                                papers youve heard about. listening the bbc broadcast each night like everyone
                                                has been enough for you so far.)
                                      (ontop of the dining table)
-                                     bedroom home))) 
+                                     bedroom home nil))) 
    
    
 ;these items won't have general descriptions I'm assuming, just description of contents.                                   
@@ -231,12 +245,14 @@
                         :appearance '(your standard frenchman though strungout by the occupation)
                         :location '(bedroom home))) 
 
-(defparameter *commands* '(save explore inspect walk pickup use talk open shoot consider)) ;consider? this might give you clues when reading memos or something.
+(defparameter *commands* '(save time explore inspect walk pickup use talk open shoot consider take drop put)) ;consider? this might give you clues when reading memos or something. put in, put on.  
+
 ;does open work on doors and containers. does pickup work like inspect on items that can't be inventoried. 
 
 (defparameter *command-synonyms* '((explore (look-around lookaround look search investigate))
                                    (walk (travel move go goto go-to))
-                                   (inspect (investigate look-at lookat view check-out checkout check search scan watch see))))
+                                   (inspect (investigate look-at lookat view check-out checkout check search scan watch see))
+                                   (time (watch clock hour minute))))
 
 ;work on later. why append no work?
 (defun synonyms-list ()
@@ -250,9 +266,7 @@
     lst)) 
 
 (defparameter *synonyms-list* (synonyms-list1)) 
-
-
-
+ 
 
 (defparameter *inventory* ())
 
@@ -269,10 +283,90 @@
                                :location '(basement cafe))))
 
 
-(defparameter *days-since-occupation* 187) ;I don't actually know how many days it should be. maybe the game should have chapters that are years or seasons
+(defparameter *days-since-occupation* (+ 150 (random 400))) ;I don't actually know how many days it should be. maybe the game should have chapters that are years or seasons
 ;this could help divide the world up, so you're in the country at one part, then maybe you're in paris, and then later the unoccupied zone, etcetera. 
 
-(defparameter *days-in-resistance* 0) ;intialize this once the game begins, or perhaps once the player successfully joins/completes a mission. 
+
+;this should really be a structure GACK. 
+(defstruct  time 
+  (days-since-occupation 0)
+  (day 0)
+  (hour 12)
+  (minute 0)
+  (period 'pm))
+
+(defparameter *time* (make-time))
+
+;(defparameter *days-in-resistance* (fourth *time-of-day*)) ;intialize this once the game begins, or perhaps once the player successfully joins/completes a mission. 
+
+
+(defun hour ()
+  (time-hour *time*))
+
+(defun minute ()
+  (time-minute *time*))
+
+(defun period ()
+  (time-period *time*))
+
+(defun day ()
+  (time-day *time*))
+
+(defun inc-time (inc-min inc-hr inc-day)
+    (setf (time-minute *time*) (+ (minute) inc-min))
+    (setf (time-hour *time*) (+ (hour) inc-hr))
+    (setf (time-day *time*) (+ (day) inc-day))
+    (time-rollover))
+  
+(defun time-rollover ()
+  (while (> (minute) 60)
+    (setf (time-minute *time*) (- (minute) 60))
+    (setf (time-hour *time*) (1+ (hour))))
+  (while (> (hour) 23)
+    (setf (time-hour *time*) (- (hour) 24))
+    (setf (time-day *time*) (1+ (day))))
+  (if (< (hour) 12)
+      (setf (time-period *time*) 'am)
+    (setf (time-period *time*) 'pm)))
+
+(defun rollover-min (min)
+  (list (round (/ min 60)) (- min (* 60 (round (/ min 60))))))
+
+(defun rollover-hr (hr)
+  (list (round (/ hr 24)) (- hr (* 24 (round (/ hr 24)))))) 
+
+(defun get-distance (destination)
+  (print destination)
+  (dolist (i (get-street-routes))
+    (if (equal (car i) destination)
+        (return (third i)))))
+  
+;lets say your speed is 1 km in 12 minutes, so 5 in an hour. have this number be affected by events. or perhaps those events just call inc-time? 
+(defun distance-time (destination)
+  (inc-time (* 12 (get-distance destination)) 0 0))   
+
+;every action takes a minute? I think this gives the player time to imagine everything that happens. this might be too short for reading a letter, 
+;planting a bomb and such. it might be too long for opening a door, reloading a gun, etcetera. 
+(defun action-time ()
+  (inc-time 1 0 0))
+
+(defun convert-hour ()
+  (cond ((> (hour) 12)
+         (- (hour) 12))
+        ((zerop (hour)) 12)
+        (t (hour))))
+
+(defun show-time ()
+  (if (zerop (minute))
+      (print-description `(It is ,(convert-hour) ,(period)))
+    (print-description `(It is ,(convert-hour) ,(minute) ,(period))))) 
+
+;this will modify the description of rooms. I'll need some really expert pattern matching to do anything too sophisticated. right now all I can imagine
+;is adding something like "the sun shines through the windows" or the moonlight hit the pitcher. Things that normally are not worth mentioning in the description
+;but that the time of day highlights. It would be more interesting though if I could also change the description of certain items, or even characters. 
+;its also worth considering moving objects around based on the time of day, like someone might have a kettle on in the morning, but at night would have some
+;candles lit. 
+(defun describe-time () ) 
 
 (defun intro ()
   `(it has been ,*days-since-occupation* days since the horrible machine had quaked through the countryside and split your country in two.
@@ -340,6 +434,7 @@
   (change-area1 (car (third (assoc (current-location) *map*)))))
 
 (defun change-location1 (location)
+  (distance-time location)
   (setf (second (character-location *player*)) location)
   (change-area1 (car (third (assoc (current-location) *map*)))))
 
@@ -363,7 +458,8 @@
 ;change this so that the street is randomized each visit. might have a patrol coming through, might be merchants (though this should be more static)
 ;and pedestrians. a character you recognize might even appear (which could be a problem if they're an enemy who recongizes you). 
 (defun describe-street ()
-  (second (assoc 'streets *map*)))
+  (second (assoc 'streets *map*))
+  (second (assoc (current-location) (cdr (assoc 'streets *map*)))))
        
 (defun get-street-routes ()
   (cdr (cdr (assoc (current-location) (cdr (assoc 'streets *map*))))))
@@ -601,12 +697,13 @@
 (defun find-object (parsed-phrase)
   (find-in-phrase parsed-phrase (get-object-names)))
 
+
 (defun do-command (cmd obj)
   (cond ((and (not (on-street)) (equal cmd 'walk)) (change-area1 obj))
         ((and (not (on-street)) (null cmd) (member obj (list-areas))) (change-area1 obj))
         ((and (on-street) (equal cmd 'walk)) (change-location1 obj))
         ((and (on-street) (null cmd)) (change-location1 obj)) ;this is bad cause there's no way to check
-        
+        ((equal cmd 'time) (show-time))
         ((equal cmd 'inspect) (inspect-object obj)))) ;I'm not sure that I want on-street to handle the descriptive part. 
 
 ;this will prompt the player for a line, turn it into a list of chars, go through the whole list and as long as a space is not encountered
@@ -686,7 +783,7 @@
             (append area (list (name-area) (write-area)))
             (format t "would you like to add add another area to this location? y/n ")
             (setf continue (read))))
-    area)))
+    area))) 
 
 ;this might be useful to use for hidden areas of the game. they won't be in the map file until something is triggered, and then this add area will be called. 
 (defun add-area (location name description)
@@ -701,6 +798,9 @@
 
 (defun rewrite-area (location area)
   (setf (second (cdr (assoc area (cdr (assoc location *map*))))) (read-list)))
+
+;OBJECTS/ITEMS. these will allow objects to be removed from a container or area, and inserted into inventory. I need a way to hide
+;items and locations from the player without deleting them from the map. maybe they have a t or nil value at end. 
 
                
 
