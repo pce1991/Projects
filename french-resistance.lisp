@@ -74,7 +74,7 @@
                                        Something you never minded before but now you feel yourself check to the left and right for any hostile element.)
                                        (cafe south 2) (movie-theatre south-west 3) (eiffel-tower west 10))
 ;WRITE DESCRIPTIONS FOR EACH STREET
-                       (cafe (a few german soldiers sit outside the cafe enjoying weather that should be enjoyed by the french too nervous
+                       (cafe (a few german soldiers sit outside the cafe enjoying weather that should be enjoyed by the french who are too nervous
                                 to sit near the boisterous intruders.)
                         (home north 2) (movie-theatre west 2) (eifel-tower west 8))
                        (movie-theatre (apartment north-east 3) (cafe east 2) (eiffel-twoer west 6))
@@ -112,7 +112,6 @@
 (defparameter *area-synonyms* (get-area-synonyms)) 
 
   
-
 ;1-2-13
 ;this might work if the main map gets too big. I could keep this global variable which will contain things like the locations in
 ;paris, and locations on the outskirts, etcetera. 
@@ -133,6 +132,11 @@
                          (south eifell-tower)
                          (east ?x)
                          (south ?x))))
+
+;these will be like objects that are features of a location, or things that can be interactd with. Are these justified as different from objects? 
+(defparameter *area-features* '((eiffel-tower 
+                                 (bottom (eleveator-cable))
+                                 (top (flagpole)))))
 
 ;I could maybe make paths like for 314. (home (cafe 2) (eiffel-tower 10)). This would get rid of the need for the player to draw
 ;a map, and would allow a kind of quick travel between locations. it might be hard to create tension that way? perhaps
@@ -155,8 +159,10 @@
                                      (elevator-cable . cut))))) ;the . represents an action that can be performed. 
 
 ;the three nil values are respectively, can it be equipped, is it hidden, and does it have functions associated with it? 
+;1-8-14 !!!! I added a parentheses around the items in an area, so now all object functions are out of whack, but this is necessary
+;so that I can add and delete objects from a room, so they must be in a list. 
 (defparameter *object-locations* '((home (bedroom 
-                                         (girl-photo (you wonder what happened to her.
+                                         ((girl-photo (you wonder what happened to her.
                                                             its been a while since you last saw her so you have you suspicions.)
                                                        (Ontop of your dresser stands a picture of a girl you once knew) ;this is a descrition to be used. 
                                                        bedroom home nil nil nil) ;this is how to find where to place it. might change to lists if its in
@@ -172,12 +178,13 @@
                                                               papers youve heard about. listening to the bbc broadcast each night like everyone
                                                               has been enough for you so far.)
                                                     (Over on the table is a newspaper.)
-                                                    bedroom home nil nil nil))))) 
-;this checks to see if an item can be equipped. 
-(defun equipp () )
+                                                    bedroom home nil nil nil)
+                                         (pistol (a small pistol of your fathers. it seems surreal that you might need it.)
+                                                 (it sits inside a wooden box you  under your clothes.)
+                                                 bedroom home t t ((fire-weapon 6))))))) )
 
-;this checks to see if an item is in a container or otherwise hidden. 
-(defun hiddenp () )
+
+
 
 ;pattern matching? this causes a problem when there are two similar objects like the photo of the girl and of your parents. otherwise it should just be
 ;able to find the word the player input and then display that.  
@@ -225,8 +232,6 @@
                                             next to it rests the  pistol you never thought would be needed.
                                             then there is your sparse and innocent journal which you hope they dont find.)
                                       (bible pistol) bedroom home))) ;fourth and fifth acess area and location. 
-
-
                                          
 
 (defstruct character
@@ -235,6 +240,7 @@
   (location-description nil)
   (location nil)
   (inventory nil)
+  (holding nil) ;this will have a name of what's currently being held. 
   (loyalty nil)
   (undercover nil)
   (anxiety 0)
@@ -245,14 +251,15 @@
                         :appearance '(your standard frenchman though strungout by the occupation)
                         :location '(bedroom home))) 
 
-(defparameter *commands* '(save time explore inspect walk pickup use talk open shoot consider take drop put)) ;consider? this might give you clues when reading memos or something. put in, put on.  
+(defparameter *commands* '(save time enter exit explore inspect walk pickup use talk open consider equip take inventory drop put)) ;consider? this might give you clues when reading memos or something. put in, put on.  
 
 ;does open work on doors and containers. does pickup work like inspect on items that can't be inventoried. 
 
 (defparameter *command-synonyms* '((explore (look-around lookaround look search investigate))
                                    (walk (travel move go goto go-to))
                                    (inspect (investigate look-at lookat view check-out checkout check search scan watch see))
-                                   (time (watch clock hour minute))))
+                                   (time (watch clock hour minute))
+                                   (take (keep pocket store))))
 
 ;work on later. why append no work?
 (defun synonyms-list ()
@@ -268,7 +275,26 @@
 (defparameter *synonyms-list* (synonyms-list1)) 
  
 
+;maybe feature more description about what things you can have in your inventory. there will also be objects that you are holding on your person. 
+;start out with some default items like a passport which can be shown to enemy patrols.  
 (defparameter *inventory* ())
+ 
+(defun list-inventory ()
+  (let ((lst nil))
+    (dolist (i *inventory*)
+      (push (car i) lst))
+    lst))
+
+(defun show-inventory ()
+  (if (null (list-inventory))
+      (print-description '(you do not have anything on your person.))
+    (let ((lst (reverse '(you have in your possession a))))
+      (dolist (i (list-inventory))
+        (push i lst)
+        (when (not (null (member i (list-inventory))))
+          (nconc '(and a) lst)))
+      (print-description (reverse lst)))))
+    
 
 (defparameter *characters* `(,(make-character
                                :name 'barista ;proprieter. Create synonyms for each character. Or just for occupations? 
@@ -391,6 +417,10 @@
     (push 'streets lst)
     (push 'street lst)))  ;this pushes streets onto the list because every location will have a way out of it. 
 
+;might be a too simplistic system, what if there are multiple entrances. 
+(defun entrance ()
+  (car (reverse (list-areas))))
+
 (defun list-locations ()
   (let ((lst nil))
     (dolist (i *map*)
@@ -435,8 +465,8 @@
 
 (defun change-location1 (location)
   (distance-time location)
-  (setf (second (character-location *player*)) location)
-  (change-area1 (car (third (assoc (current-location) *map*)))))
+  (setf (second (character-location *player*)) location))
+;  (change-area1 (car (third (assoc (current-location) *map*)))))
 
 (defun change-area ()
   (setf (first (character-location *player*)) (read))
@@ -516,8 +546,79 @@
 
 ;OBJECTS
 
+;this checks to see if an item can be equipped. 
+(defun equipp (obj)
+  (nth 4 (cdr (assoc obj (get-objects))))) ;this is pretty gross though, this makes objects rather rigid. 
+
+;if there is one function it'll return it as a symbol, if there are multiple functions it'll return a list of all of them. 
+;WARNING. this will only work with objects on the map, not those in the inventory. add a check to see. 
+(defun object-functions (obj)
+  (cond ((assoc obj (get-objects))
+         (nth 6 (cdr (assoc obj (get-objects)))))
+        ((assoc obj *inventory*)
+         (nth 6 (cdr (assoc obj *inventory*))))))
+
+;will need to create a synonyms list of these so that the player can use them effectively when they're added to commands. 
+(defun function-names (obj)
+  (let ((lst nil))
+    (dolist (i (object-functions obj))
+      (push (car i) lst))
+    lst)) 
+        
+
+;this checks to see if an item is in a container or otherwise hidden. 
+(defun hiddenp (obj) 
+  (nth 5 (cdr (assoc obj (get-objects))))) 
+
+(defun take (obj)
+  (when (equipp obj)
+      (push (assoc obj (get-objects)) *inventory*)
+      (remove-obj obj)
+      (print-description `(you take the ,obj and keep it with you.))))  
+
+;this will work, equip/pickup do the same thing, but equip with something in inventory, and pickup with something in the map. whenever something is
+;in hand you have access to its functions. I'm not sure I like this, maybe I should just give access to all items in inventory, and let the player
+;imagine pulling them out. after all, they'll just be in your pocket or slung around your shoulder or something. but what about when you have
+;a backpack, maybe there are some items that have to be equipped like a bomb, and others like a pistol that can just be drawn and used. 
+(defun equip (obj)
+  (when (assoc obj *inventory*)
+    (when (character-holding *player*)
+      (unequip (character-holding *player*))
+      (setf (character-holding *player*) obj))
+    (function-access obj)
+    (print-description `(you hold the ,obj in your hand.))))
+
+;call this whenever an item is currently equipped, and a new one is called. 
+(defun unequip (obj)
+  (function-no-access obj)) 
+
+;does this need to check to see if an item. let this happen to items that can't be equipped, so you just leave it behind when you move,
+;or drop it when you pick something else up. 
+(defun pickup (obj)
+  (print-description `(you pick up the ,obj)) 
+  (function-access obj))
+
+(defun drop (obj)
+  (function-no-access obj))
+
+
+;will also need a function to remove these commands though. 
+(defun function-access (obj)
+  (nconc *commands* (function-names obj))) 
+
+;this might cause a problem if there are commands that have the same name, or perhaps a synonym. 
+(defun function-no-access (obj)
+  (dolist (i (function-names obj))
+    (delete i *commands*)))
+  
+
+
+
+
+
+;modified this to second now that objects are in a list, so its just one list of them, not a list of a list of them. 
 (defun get-objects ()
-  (cdr (assoc (current-area) (cdr (assoc (current-location) *object-locations*)))))
+  (second (assoc (current-area) (cdr (assoc (current-location) *object-locations*))))) 
 
 (defun get-object-names ()
   (let ((lst nil))
@@ -537,7 +638,8 @@
 (defun show-objects ()
   (let ((lst nil))
     (dolist (i (get-objects))
-      (push (third i) lst))
+      (if (not (hiddenp (car i))) ;1-8 WHY isn't this working, hiddenp is working, 
+          (push (third i) lst)))
     (apply #'append (reverse lst)))) 
 
 ;(defmacro when (condition &rest body)
@@ -621,8 +723,8 @@
 ;COMBAT
 
 ;player will have a total number of bullets, and depending on what they shoot with, that clipsize will be sent to this function. 
-(defun roll-shot (ammo)
-  (random (1+ ammo)))
+(defun fire-weapon (ammo)
+  (random (1+ ammo))) 
 
 ;EVENTS
 ;events will happen on the street, will have their own description added, and may add characters to the area. likelihood of certain events increases based on time of day, 
@@ -644,7 +746,8 @@
           (cond ((find-area read) (setf obj (find-area read)))
                 ((find-location read) (setf obj (find-location read)))
                 ((find-object read) (setf obj (find-object read)))
-                ((find-direction read) (setf obj (closest-along-route (find-direction read)))))
+                ((find-direction read) (setf obj (closest-along-route (find-direction read))))
+                ((find-inventory read) (setf obj (find-inventory read))))
           (do-command cmd obj)))
       (play)))) 
   
@@ -662,13 +765,16 @@
               (member i (get-object-names))
               (member i (character-inventory *player*))
               (member i (directions-list)) 
-              
+              (member i (list-inventory))
               ;write one for paths. opening a door should be the same as going to that area, so list-area handles things like go to bathroom, but not
               ;open the door to the bathroom. 
               (member i (list-locations))
               (member i (list-areas)))
           (push i cmd)))
     (reverse cmd)))
+
+;Write a function to act follow up questions. if you're going between rooms and there are stairs going up, going down, and a door, you should be able to
+;say "stairs" and then it'll ask you: which ones? 
 
 (defmacro find-in-phrase (phrase set)
   `(dolist (i ,phrase)
@@ -697,13 +803,20 @@
 (defun find-object (parsed-phrase)
   (find-in-phrase parsed-phrase (get-object-names)))
 
+(defun find-inventory (parsed-phrase)
+  (find-in-phrase parsed-phrase (list-inventory)))
 
+;should I add some error messages in here? 
 (defun do-command (cmd obj)
   (cond ((and (not (on-street)) (equal cmd 'walk)) (change-area1 obj))
         ((and (not (on-street)) (null cmd) (member obj (list-areas))) (change-area1 obj))
         ((and (on-street) (equal cmd 'walk)) (change-location1 obj))
-        ((and (on-street) (null cmd)) (change-location1 obj)) ;this is bad cause there's no way to check
+        ((and (on-street) (null cmd)) (change-location1 obj));this is bad cause there's no way to check
+        ((and (on-street) (equal cmd 'enter) (null obj)) (change-area1 (entrance))) ;enter is a distinct command from walk, but i'm not sure it should be
         ((equal cmd 'time) (show-time))
+        ((equal cmd 'take) (take obj))  
+        ((equal cmd 'equip) (equip obj)) 
+        ((equal cmd 'inventory) (show-inventory))
         ((equal cmd 'inspect) (inspect-object obj)))) ;I'm not sure that I want on-street to handle the descriptive part. 
 
 ;this will prompt the player for a line, turn it into a list of chars, go through the whole list and as long as a space is not encountered
@@ -787,7 +900,7 @@
 
 ;this might be useful to use for hidden areas of the game. they won't be in the map file until something is triggered, and then this add area will be called. 
 (defun add-area (location name description)
-  (push (list name description) (cdr (assoc location *map*))))
+  (nconc (cdr (assoc location *map*)) (list name description))) ;uses nconc to preserve order of map so that first area is always the entrance. 
 
 
 (defun name-area ()
@@ -800,9 +913,23 @@
   (setf (second (cdr (assoc area (cdr (assoc location *map*))))) (read-list)))
 
 ;OBJECTS/ITEMS. these will allow objects to be removed from a container or area, and inserted into inventory. I need a way to hide
-;items and locations from the player without deleting them from the map. maybe they have a t or nil value at end. 
-
-               
-
+;items and locations from the player without deleting them from the map. maybe they have a t or nil value at end. this is a general function.
+; I can write a more specific one for use in gameplay where an object will only be removed while the player is in its area. 
+(defun remove-object (obj loc area)
+  (if (member obj (car (get-objects)))
+      (setf (second (assoc area (cdr (assoc loc *object-locations*))))
+            (cdr (second (assoc area (cdr (assoc loc *object-locations*))))))
+;    (setf (second (assoc area (cdr (assoc loc *object-locations*))))
+    (delete (assoc obj (second (assoc area (cdr (assoc loc *object-locations*)))))
+            (second (assoc area (cdr (assoc loc *object-locations*)))))))
+                   
+;GACKGACKGACK
+(defun remove-obj (obj)
+  (if (member obj (car (get-objects)))
+      (setf (second (assoc (current-area) (cdr (assoc (current-location) *object-locations*))))
+            (cdr (second (assoc (current-area) (cdr (assoc (current-location) *object-locations*))))))
+    (delete (assoc obj (second (assoc (current-area) (cdr (assoc (current-location) *object-locations*)))))
+            (second (assoc (current-area) (cdr (assoc (current-location) *object-locations*))))))) 
+            
 ;write some general functions that'll give me a particular part of a list such as *map*. THis'll help clean up the code
 ;and make this more of an engine than a particular game, because it has to be easy to read if its gonna be reused. 
