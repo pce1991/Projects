@@ -1,5 +1,5 @@
 ;FRENCH RESISTANCE
- 
+
 ;so this is kind of gross, but I can't really use punctuation except periods. I guess I'll have to write it like Hemingway. 
 
 ;import stuff from onlisp? so far I'm only using explode, but I'm sure these might be helpful. do-tuples/o might be useful. 
@@ -8,8 +8,9 @@
  
 ;import a dictionary so I won't have to enter synonyms manually, it'll just look it up in the dictionary. will also aid conversation. 
 
+;======================================================================================================================================================
 ;GLOBAL VARIABLES AND STRUCTURES 
-;======================================================================================
+;=======================================================================================================================================================
 
 ;these descriptions are too much about history and thought, not enough about description of actual location.
 (defparameter *map* '((home
@@ -18,17 +19,16 @@
                        (bedroom (there rests your bed as the sun strikes through the window to shine on it.)) ;and on your dresser a picture of your parents and a girl you once knew.
                        (bathroom (you stand in front of your sink and stare into the mirror.)))
                       (apartment
-                       (this is your apartment building.)
+                       (this is your apartment building.) 
                        (stair-case (you stand about halfway up the building. the stairs lead down the street.))
                        (landladys-door (you stand in front of your landladys door.))) ;have the player knock to talk to her. 
                       (eiffel-tower 
                        (symbol of the glory of fallen France. Unconquered by Hitler.) ;description
-                       (bottom (you stand undr the looming tower))
+                       (bottom (you stand undr the looming tower.))
                        (top (you stare out of the lit and conquered city below.))) 
                       (cafe
                        (a cozy and small cafe. supposedly there is a resistance organization that meets here.)
-                       (main-area (there are tables with candles lit and patrons sipping coffee. there are less people here than usual 
-                                         and even with conversations happening the place seems hushed.))
+                       (main-area (there are tables with candles lit and patrons sipping coffee. there are less people here than usual and even with conversations happening the place seems hushed.))
                        (bathroom (a typical public restroom.)) ;i wish I could randomize someone being in a stall. 
                        (basement (the basement is lit by lamps showing tables atopped with maps and documents bearing plans.)))
                       (movie-theatre 
@@ -160,7 +160,8 @@
 
 ;the three nil values are respectively, can it be equipped, is it hidden, and does it have functions associated with it? 
 ;1-8-14 !!!! I added a parentheses around the items in an area, so now all object functions are out of whack, but this is necessary
-;so that I can add and delete objects from a room, so they must be in a list. 
+;so that I can add and delete objects from a room, so they must be in a list. and things like if its a known object. 
+;change all these ts and nils to (fixed nil) (hidden t) etcetera. 
 (defparameter *object-locations* '((home (bedroom 
                                          ((girl-photo (you wonder what happened to her.
                                                             its been a while since you last saw her so you have you suspicions.)
@@ -180,8 +181,18 @@
                                                     (Over on the table is a newspaper.)
                                                     bedroom home nil nil nil)
                                          (pistol (a small pistol of your fathers. it seems surreal that you might need it.)
-                                                 (it sits inside a wooden box you  under your clothes.)
-                                                 bedroom home t t ((fire-weapon 6))))))) )
+                                                 (Inside a wooden box towards the back of the drawer lies a pistol.)
+                                                 bedroom home t t ((fire-weapon 6)))
+                                         (journal (a sparse journal of innocent thoughts you hope they dont find.)
+                                                  (Your journal lies in plain view ontop of your clothes. You feel like you should always be able to get to it easily even though
+                                                      you rarely ever need to.)
+                                                  bedrrom home t t ((write))) 
+                                         (bible (your parents bible. a family heirloom you suppose. though you never revered it much. 
+                                                      Its focus is on a people who arent yours in a place youve never been and a time you can hardly comprehend. 
+                                                      In these days of consequence though it feels more relavent.)
+                                                (tucked in the corner and kept under your nicer clothes is a bible.); it feels strage to leave something so fragile
+                                                       ; out in the open. It is not a living thing but a bundle of paper needing one to stave off the rot.) 
+                                                bedroom home t t ((read-text txt)))))))) 
 
 
 
@@ -194,13 +205,11 @@
 ;these are all the objects that you can pickup.
 (defparameter *items* nil)
 
-;containers can be inspected for a description, or opened for a list of contents. 
+;containers can be inspected for a description, or opened for a list of contents. ending value is if its locked or not. also add one for hidden, like a wall-safe? first
+;is now hidden, second is locked. 
 (defparameter *container-locations* '((home (bedroom
-                                             (dresser (your dresser. Containing the bible you used to consider quaint. something feels more 
-                                                            relavant and comforting about it now. But no less dubious. 
-                                                            next to it rests the  pistol you never thought would be needed.
-                                                            then there is your sparse and innocent journal which you hope they dont find.)
-                                                      (bible pistol journal) bedroom home))))) 
+                                             ((dresser (your dresser stands in the corner containing various possessions of yours.)
+                                                      (bible pistol journal) bedroom home nil nil))))))
                                          
                                  
                         
@@ -233,6 +242,7 @@
                                             then there is your sparse and innocent journal which you hope they dont find.)
                                       (bible pistol) bedroom home))) ;fourth and fifth acess area and location. 
                                          
+
 
 (defstruct character
   (name nil)
@@ -271,7 +281,7 @@
       (dolist (j (cdr i))
         (setf lst (append j lst))))
     lst)) 
-
+ 
 (defparameter *synonyms-list* (synonyms-list1)) 
  
 
@@ -313,13 +323,21 @@
 ;this could help divide the world up, so you're in the country at one part, then maybe you're in paris, and then later the unoccupied zone, etcetera. 
 
 
+;==============================================================================================================================================================
+;TIME and SIMULATION
+;==============================================================================================================================================================
+
 ;this should really be a structure GACK. 
 (defstruct  time 
+  (year 1940)
+  (month 'july)
+  (date 16)
   (days-since-occupation 0)
   (day 0)
   (hour 12)
   (minute 0)
-  (period 'pm))
+  (second 0)
+  (period 'pm)) 
 
 (defparameter *time* (make-time))
 
@@ -332,19 +350,26 @@
 (defun minute ()
   (time-minute *time*))
 
+(defun seconds ()
+  (time-second *time*))
+
 (defun period ()
   (time-period *time*))
 
 (defun day ()
   (time-day *time*))
 
-(defun inc-time (inc-min inc-hr inc-day)
-    (setf (time-minute *time*) (+ (minute) inc-min))
-    (setf (time-hour *time*) (+ (hour) inc-hr))
-    (setf (time-day *time*) (+ (day) inc-day))
-    (time-rollover))
+(defun inc-time (inc-sec inc-min inc-hr inc-day)
+  (setf (time-second *time*) (+ (seconds) inc-sec))
+  (setf (time-minute *time*) (+ (minute) inc-min))
+  (setf (time-hour *time*) (+ (hour) inc-hr))
+  (setf (time-day *time*) (+ (day) inc-day))
+  (time-rollover))
   
 (defun time-rollover ()
+  (while (> (seconds) 60) 
+    (setf (time-second *time*) (- (seconds) 60))
+    (setf (time-minute *time*) (1+ (minute))))
   (while (> (minute) 60)
     (setf (time-minute *time*) (- (minute) 60))
     (setf (time-hour *time*) (1+ (hour))))
@@ -353,7 +378,7 @@
     (setf (time-day *time*) (1+ (day))))
   (if (< (hour) 12)
       (setf (time-period *time*) 'am)
-    (setf (time-period *time*) 'pm)))
+    (setf (time-period *time*) 'pm))) 
 
 (defun rollover-min (min)
   (list (round (/ min 60)) (- min (* 60 (round (/ min 60))))))
@@ -369,12 +394,12 @@
   
 ;lets say your speed is 1 km in 12 minutes, so 5 in an hour. have this number be affected by events. or perhaps those events just call inc-time? 
 (defun distance-time (destination)
-  (inc-time (* 12 (get-distance destination)) 0 0))   
+  (inc-time 0 (* 12 (get-distance destination)) 0 0))   
 
 ;every action takes a minute? I think this gives the player time to imagine everything that happens. this might be too short for reading a letter, 
 ;planting a bomb and such. it might be too long for opening a door, reloading a gun, etcetera. 
 (defun action-time ()
-  (inc-time 1 0 0))
+  (inc-time 30 0 0 0))
 
 (defun convert-hour ()
   (cond ((> (hour) 12)
@@ -402,8 +427,9 @@
 ;the three papers I recall being published were resistance, liberation, and combat. 
        
 
+;==============================================================================================================================================================
 ;DESCRIPTION and NAVIGATION FUNCTIONS
-;=====================================================================================================
+;===============================================================================================================================================================
 
 ;1-3-14 rewrite a lot of the functions for moving the player. you should be prompted where to go, but say where to go. walk to the cafe. run to the eiffel tower
 ;sneak to the movie-theatre. 
@@ -544,8 +570,9 @@
            (show-characters (current-area) (current-location))
            (describe-paths)))
 
+;==================================================================================================================================
 ;OBJECTS
-
+;===================================================================================================================================
 ;this checks to see if an item can be equipped. 
 (defun equipp (obj)
   (nth 4 (cdr (assoc obj (get-objects))))) ;this is pretty gross though, this makes objects rather rigid. 
@@ -569,6 +596,11 @@
 ;this checks to see if an item is in a container or otherwise hidden. 
 (defun hiddenp (obj) 
   (nth 5 (cdr (assoc obj (get-objects))))) 
+
+;this will be used in describing hidden objects. if you come across something like your father's pistol, its natural that you'd think
+;of it then and there, not only when you pick it up. I'm worried that creates a schism between descriptions of places
+(defun known-objp (obj)
+  (nth 7 (cdr (assoc obj *inventory*)))) 
 
 (defun take (obj)
   (when (equipp obj)
@@ -612,10 +644,6 @@
     (delete i *commands*)))
   
 
-
-
-
-
 ;modified this to second now that objects are in a list, so its just one list of them, not a list of a list of them. 
 (defun get-objects ()
   (second (assoc (current-area) (cdr (assoc (current-location) *object-locations*))))) 
@@ -642,6 +670,47 @@
           (push (third i) lst)))
     (apply #'append (reverse lst)))) 
 
+;================================================================================================================================
+;CONTAINERS
+;================================================================================================================================
+
+(defun get-containers ()
+  (second (assoc (current-area) (cdr (assoc (current-location) *container-locations*)))))
+
+(defun describe-containers ()
+  (let ((lst nil))
+    (dolist (i (get-containers))
+      (push (second i) lst))
+    (apply #'append lst))) 
+
+;rewrite these list functions to use this, and similar 
+(defun list-containers ()
+  (mapcar #'car (get-containers))) 
+
+(defun list-contents (container)
+  (nth 1 (cdr (assoc container (get-containers)))))
+
+(defun get-contents (container)
+  (let ((lst nil))
+    (dolist (i (list-contents container))
+      (push (assoc i (get-objects)) lst))
+    lst))
+
+;this will go through each object in the container, call describe-object or just say where it is? open will print that description. 
+(defun show-contents (container)
+  (let ((lst nil))
+    (dolist (i (get-contents container))
+      (push (third i) lst))
+    (print-description (apply #'append (reverse lst))))) 
+  
+
+;the problem with this is it should keep showing open containers. this could be included in describe-containers, so that if any of them are open
+;they display contents. 
+(defun open-> (container) 
+  (show-contents container)) 
+    
+                      
+
 ;(defmacro when (condition &rest body)
  ; `(if ,condition (progn ,@body)))
 ;(when-cond ((test1 do1)) ((test2 do2))) this will work where multiple things might be true, and if they are they should be done. 
@@ -660,6 +729,8 @@
         (push (show-route i) lst)))
     (when (show-characters)
       (push (show-characters) lst))
+    (when (describe-containers)
+      (push (describe-containers) lst))
     (when (show-objects)
       (push (show-objects) lst))
     (when (describe-paths)
@@ -747,7 +818,8 @@
                 ((find-location read) (setf obj (find-location read)))
                 ((find-object read) (setf obj (find-object read)))
                 ((find-direction read) (setf obj (closest-along-route (find-direction read))))
-                ((find-inventory read) (setf obj (find-inventory read))))
+                ((find-inventory read) (setf obj (find-inventory read)))
+                ((find-container read) (setf obj (find-container read))))
           (do-command cmd obj)))
       (play)))) 
   
@@ -766,6 +838,7 @@
               (member i (character-inventory *player*))
               (member i (directions-list)) 
               (member i (list-inventory))
+              (member i (list-containers))
               ;write one for paths. opening a door should be the same as going to that area, so list-area handles things like go to bathroom, but not
               ;open the door to the bathroom. 
               (member i (list-locations))
@@ -790,7 +863,7 @@
               (loop for j in parsed-phrase do
                     (if (member j (car (cdr i)))
                         (return-from commands (car i)))))))
-
+ 
 (defun find-area (parsed-phrase)
   (find-in-phrase parsed-phrase (list-areas)))
 
@@ -804,7 +877,10 @@
   (find-in-phrase parsed-phrase (get-object-names)))
 
 (defun find-inventory (parsed-phrase)
-  (find-in-phrase parsed-phrase (list-inventory)))
+  (find-in-phrase parsed-phrase (list-inventory))) 
+
+(defun find-container (parsed-phrase) 
+  (find-in-phrase parsed-phrase (list-containers)))
 
 ;should I add some error messages in here? 
 (defun do-command (cmd obj)
@@ -813,9 +889,11 @@
         ((and (on-street) (equal cmd 'walk)) (change-location1 obj))
         ((and (on-street) (null cmd)) (change-location1 obj));this is bad cause there's no way to check
         ((and (on-street) (equal cmd 'enter) (null obj)) (change-area1 (entrance))) ;enter is a distinct command from walk, but i'm not sure it should be
+        ((and (on-street) (equal cmd 'enter)) (change-area1 obj))
         ((equal cmd 'time) (show-time))
         ((equal cmd 'take) (take obj))  
         ((equal cmd 'equip) (equip obj)) 
+        ((equal cmd 'open) (open-> obj))
         ((equal cmd 'inventory) (show-inventory))
         ((equal cmd 'inspect) (inspect-object obj)))) ;I'm not sure that I want on-street to handle the descriptive part. 
 
@@ -901,8 +979,7 @@
 ;this might be useful to use for hidden areas of the game. they won't be in the map file until something is triggered, and then this add area will be called. 
 (defun add-area (location name description)
   (nconc (cdr (assoc location *map*)) (list name description))) ;uses nconc to preserve order of map so that first area is always the entrance. 
-
-
+ 
 (defun name-area ()
   (read))
 
