@@ -3,14 +3,90 @@
 ;so this is kind of gross, but I can't really use punctuation except periods. I guess I'll have to write it like Hemingway. 
 
 ;import stuff from onlisp? so far I'm only using explode, but I'm sure these might be helpful. do-tuples/o might be useful. 
-(load "~/Projects/onlisp.lisp")
-(load "~/Projects/patmatch-Novak.lisp") ;this will be used in conversation system. 
+;(load "~/Projects/onlisp.lisp")
+;(load "~/Projects/patmatch-Novak.lisp") ;this will be used in conversation system. 
+ 
+
+;UTILITY FUNCTIONS
+;========================================================================================
+
+;Clean up text. Why does this give me (t t) everytime? 
+(defun tweak-text (lst caps lit)
+  (when lst
+    (let ((item (car lst))
+          (rest (cdr lst)))
+      (cond ((eql item #\space) (cons item (tweak-text rest caps lit)))
+            ((member item '(#\! #\? #\.)) (cons item (tweak-text rest t lit)))
+            ((eql item #\") (tweak-text rest caps (not lit)))
+            (lit (cons item (tweak-text rest nil lit)))
+            (caps (cons (char-upcase item) (tweak-text rest nil lit)))
+            (t (cons (char-downcase item) (tweak-text rest nil nil)))))))
+
+(defun print-description (lst)
+  (princ (coerce (tweak-text (coerce (string-trim "() "
+                                                  (prin1-to-string lst))
+                                     'list)
+                             t
+                             nil)
+                 'string))
+  (fresh-line))
  
 ;import a dictionary so I won't have to enter synonyms manually, it'll just look it up in the dictionary. will also aid conversation. 
+(defmacro when-cond (&rest clauses)
+  (if (null clauses)
+      nil
+    (let ((cl1 (car clauses))
+           (sym (gensym)))
+      `(let ((,sym ,(car cl1)))
+         (if ,sym ;what if ,sym is nil? it'll terminate won't it? 
+             (progn
+               ,@(cdr cl1) ;is this right? 
+               (when-cond ,@(cdr clauses))) 
+           (when-cond ,@(cdr clauses)))))))
+  
 
-;======================================================================================================================================================
+;this is what I should use in french resistance, I didn't know about anaphorisms then. 
+;this is having some problems, when all three clauses are true, it seems to only do two? 
+(defmacro awhen-cond (&rest clauses)
+  (if (null clauses)
+      nil
+    (let ((cl1 (car clauses))
+          (sym (gensym)))
+      `(let ((,sym ,(car cl1)))
+         (if ,sym ;when I use a when it terminates when the first thing is nil, it only works when its all true. not a problem with when-cond though. hmm.
+             (progn
+               (let ((it ,sym)) ,@(cdr cl1))
+               (awhen-cond ,@(cdr clauses)))
+           (awhen-cond ,@(cdr clauses)))))))
+
+(defmacro while (test &body body)
+  `(do ()
+       ((not ,test))
+     ,@body))
+
+;Doesn't Work! infinite loops. 
+(defmacro nwhile (&rest clauses)
+  (if (null clauses)
+      nil
+    (let ((cl1 (car clauses))
+          (sym (gensym)))
+      `(let ((,sym ,(car cl1)))
+         (while ,sym ;;;I feel like sym is not getting updated by cl1, so that its never being reevaluated again. 
+           ,@(cdr cl1)) 
+         (nwhile ,@(cdr clauses)))))) 
+
+(defun explode (sym)
+  (map 'list #'(lambda (c)
+                 (intern (make-string 1
+                                      :initial-element c)))
+                 (symbol-name sym)))
+
+(defun end (lst)
+  (car (last lst)))
+
+;=================================================================================================================
 ;GLOBAL VARIABLES AND STRUCTURES 
-;=======================================================================================================================================================
+;=================================================================================================================
 
 ;these descriptions are too much about history and thought, not enough about description of actual location.
 (defparameter *map* '((home
@@ -71,14 +147,14 @@
                        (a typically oppressed though still lovely street of paris. The boast of the nazis hang red and black over buildings.
                           their harsh language is strewn across buildings while commands bark from posters.)
                        (home (the street is never crowded so when you emerge out of your building you feel yourself stand out. 
-                                       Something you never minded before but now you feel yourself check to the left and right for any hostile element.)
+                                       Something you never minded before but now you find yourself checking to the left and right for any unwanted scrutiny.)
                                        (cafe south 2) (movie-theatre south-west 3) (eiffel-tower west 10))
 ;WRITE DESCRIPTIONS FOR EACH STREET
                        (cafe (a few german soldiers sit outside the cafe enjoying weather that should be enjoyed by the french who are too nervous
                                 to sit near the boisterous intruders.)
                         (home north 2) (movie-theatre west 2) (eifel-tower west 8))
-                       (movie-theatre (apartment north-east 3) (cafe east 2) (eiffel-twoer west 6))
-                       (eiffel-tower (apartment east 10) (cafe east 8) (movie-theatre east 6))
+                       (movie-theatre () (apartment north-east 3) (cafe east 2) (eiffel-twoer west 6))
+                       (eiffel-tower () (apartment east 10) (cafe east 8) (movie-theatre east 6))
                        (movie-theatre ())
                        (nightclub ())
                        (chruch ())
@@ -99,17 +175,21 @@
                        (west ?x)))))
  
 ;necessary?
-(defparameter *location-synonyms* nil)
+;(defparameter *location-synonyms* nil)
 
-;get-paths is called before the character is created. 
-(defun get-area-synonyms ()
-  (let ((lst nil))
-    (dolist (i (get-paths))
-      (cons (second i) lst))
-    lst))
+;get-paths is called before the person is created. 
+;(defun get-area-synonyms ()
+ ; (let ((lst nil))
+  ;  (dolist (i (get-paths))
+   ;   (cons (second i) lst))
+    ;lst)) 
 
 ;build this out of the path descriptions. Sometimes I might want to call something different in the path description than in the code. 
-(defparameter *area-synonyms* (get-area-synonyms)) 
+(defparameter *entrance-synonyms* '(in inside in-side entrance)) ;this only handles entry right now, not navigating between rooms. 
+
+(defparameter *area-synonyms* nil)
+
+;(setf *area-synonyms* (get-area-synonyms))
 
   
 ;1-2-13
@@ -206,10 +286,10 @@
 (defparameter *items* nil)
 
 ;containers can be inspected for a description, or opened for a list of contents. ending value is if its locked or not. also add one for hidden, like a wall-safe? first
-;is now hidden, second is locked. 
+;is now hidden, second is being viewed, third is locked
 (defparameter *container-locations* '((home (bedroom
                                              ((dresser (your dresser stands in the corner containing various possessions of yours.)
-                                                      (bible pistol journal) bedroom home nil nil))))))
+                                                      (bible pistol journal) bedroom home nil nilnil))))))
                                          
                                  
                         
@@ -243,25 +323,27 @@
                                       (bible pistol) bedroom home))) ;fourth and fifth acess area and location. 
                                          
 
-
-(defstruct character
+            
+(defstruct person
   (name nil)
   (appearance nil)
   (location-description nil)
   (location nil)
   (inventory nil)
   (holding nil) ;this will have a name of what's currently being held. 
-  (loyalty nil)
+  (viewing nil) ;this will be for inspecting a container or a document or something
+                ;may have other effects on perception. 
+  (loyalty nil) 
   (undercover nil)
   (anxiety 0)
   (suspicion 0)) 
 
-(defparameter *player* (make-character
+(defparameter *player* (make-person
                         :name '(Jacques Gallion)
                         :appearance '(your standard frenchman though strungout by the occupation)
                         :location '(bedroom home))) 
 
-(defparameter *commands* '(save time enter exit explore inspect walk pickup use talk open consider equip take inventory drop put)) ;consider? this might give you clues when reading memos or something. put in, put on.  
+(defparameter *commands* '(save time enter exit explore inspect walk pickup use talk open close consider equip take inventory drop put)) ;consider? this might give you clues when reading memos or something. put in, put on.  
 
 ;does open work on doors and containers. does pickup work like inspect on items that can't be inventoried. 
 
@@ -306,12 +388,12 @@
       (print-description (reverse lst)))))
     
 
-(defparameter *characters* `(,(make-character
-                               :name 'barista ;proprieter. Create synonyms for each character. Or just for occupations? 
+(defparameter *persons* `(,(make-person
+                               :name 'barista ;proprieter. Create synonyms for each person. Or just for occupations? 
                                :appearance '(a middle-aged man with a sullen look on his face.)
                                :location-description '(a middle-aged man stands behind the bar.) ;this can come before or after appearance, so write two functions with a way to determ           
                                :location '(main-area cafe))
-                             ,(make-character
+                             ,(make-person
                                :name '(Jean Augustin)
                                :appearance '(a man not that much older than you. he appears weathered and this experience seems the source of his confidence.
                                                he seems to know what is required. and sure in what he is capable of.)
@@ -386,14 +468,17 @@
 (defun rollover-hr (hr)
   (list (round (/ hr 24)) (- hr (* 24 (round (/ hr 24)))))) 
 
+;have this return an error if it gets a destination that isn't a location. 
 (defun get-distance (destination)
-  (print destination)
   (dolist (i (get-street-routes))
     (if (equal (car i) destination)
-        (return (third i)))))
+        (return (third i))))) 
   
 ;lets say your speed is 1 km in 12 minutes, so 5 in an hour. have this number be affected by events. or perhaps those events just call inc-time? 
-(defun distance-time (destination)
+(defun distance-time (destination) 
+  ;I get a frequent error here when destination is passed in as nil. It usually reveals an error some where else, but maybe I should add a check here? 
+  ;previously the error was caused because do-command wasn't checking walk (location) it was just checking walk, then chaging location to obj, thus telling 
+  ;change-location1 to change the location to (entrance), and thus screw up get-distance. 
   (inc-time 0 (* 12 (get-distance destination)) 0 0))   
 
 ;every action takes a minute? I think this gives the player time to imagine everything that happens. this might be too short for reading a letter, 
@@ -414,7 +499,7 @@
 
 ;this will modify the description of rooms. I'll need some really expert pattern matching to do anything too sophisticated. right now all I can imagine
 ;is adding something like "the sun shines through the windows" or the moonlight hit the pitcher. Things that normally are not worth mentioning in the description
-;but that the time of day highlights. It would be more interesting though if I could also change the description of certain items, or even characters. 
+;but that the time of day highlights. It would be more interesting though if I could also change the description of certain items, or even persons. 
 ;its also worth considering moving objects around based on the time of day, like someone might have a kettle on in the morning, but at night would have some
 ;candles lit. 
 (defun describe-time () ) 
@@ -456,23 +541,23 @@
 ;GET AREA OR LOCATION 
 
 (defun current-location ()
-  (second (character-location *player*)))
+  (second (person-location *player*)))
 
 (defun current-area ()
-  (car (character-location *player*)))
+  (car (person-location *player*)))
        
-(defun character-loc (character)
-  (second (character-location character)))
+(defun person-loc (person)
+  (second (person-location person)))
 
-(defun character-area (character)
-  (car (character-location character)))
+(defun person-area (person)
+  (car (person-location person)))
 
 (defun get-area () 
-  (assoc (car (character-location *player*)) (cdr (get-location)))) 
-;  (assoc (car (character-location *player*)) (cdr (assoc (second (character-location *player*)) *map*))))
+  (assoc (car (person-location *player*)) (cdr (get-location)))) 
+;  (assoc (car (person-location *player*)) (cdr (assoc (second (person-location *player*)) *map*))))
  
 (defun get-location ()
-  (assoc (second (character-location *player*)) *map*)) 
+  (assoc (second (person-location *player*)) *map*)) 
 
 (defun describe-location ()
   (second (get-location))) 
@@ -486,36 +571,38 @@
 ;changing location should by default change the area. to the first one everytime, or depending on the path? on the path I think. 
 ;have it print the description of the location here only. 
 (defun change-location ()
-  (setf (second (character-location *player*)) (read))
+  (setf (second (person-location *player*)) (read))
   (change-area1 (car (third (assoc (current-location) *map*)))))
 
 (defun change-location1 (location)
   (distance-time location)
-  (setf (second (character-location *player*)) location))
+  (setf (second (person-location *player*)) location)
+  (print-description (describe-location)))
 ;  (change-area1 (car (third (assoc (current-location) *map*)))))
 
 (defun change-area ()
-  (setf (first (character-location *player*)) (read))
+  (setf (first (person-location *player*)) (read))
   (if (on-street)
       (on-street)
     (display-room)))
 
 (defun change-area1 (area)
-  (setf (first (character-location *player*)) area)
+  (setf (first (person-location *player*)) area)
   (if (on-street)
       (on-street)))
 ;    (display-room)) )
 
 ;being on the street will trigger traveling to another location. 
 (defun on-street ()
-  (or (equal (first (character-location *player*)) 'streets)
-      (equal (first (character-location *player*)) 'street))) 
+  (or (equal (first (person-location *player*)) 'streets)
+      (equal (first (person-location *player*)) 'street))) 
 
 ;change this so that the street is randomized each visit. might have a patrol coming through, might be merchants (though this should be more static)
-;and pedestrians. a character you recognize might even appear (which could be a problem if they're an enemy who recongizes you). 
+;and pedestrians. a person you recognize might even appear (which could be a problem if they're an enemy who recongizes you). 
 (defun describe-street ()
+  (list (describe-location)
   (second (assoc 'streets *map*))
-  (second (assoc (current-location) (cdr (assoc 'streets *map*)))))
+  (second (assoc (current-location) (cdr (assoc 'streets *map*))))))
        
 (defun get-street-routes ()
   (cdr (cdr (assoc (current-location) (cdr (assoc 'streets *map*))))))
@@ -567,7 +654,7 @@
 (defun append-area ()
     (append (describe-location)
            (describe-area)
-           (show-characters (current-area) (current-location))
+           (show-persons (current-area) (current-location))
            (describe-paths)))
 
 ;==================================================================================================================================
@@ -576,6 +663,17 @@
 ;this checks to see if an item can be equipped. 
 (defun equipp (obj)
   (nth 4 (cdr (assoc obj (get-objects))))) ;this is pretty gross though, this makes objects rather rigid. 
+
+(defun in-containerp (obj)
+  (dolist (i (list-all-contents))
+    (if (member obj (second i))
+	(return t))))
+
+(defun in-viewing-containerp (obj)
+  (if (member obj
+	      (second (assoc (person-viewing *player*) (list-all-contents))))
+      t
+      nil))
 
 ;if there is one function it'll return it as a symbol, if there are multiple functions it'll return a list of all of them. 
 ;WARNING. this will only work with objects on the map, not those in the inventory. add a check to see. 
@@ -597,16 +695,19 @@
 (defun hiddenp (obj) 
   (nth 5 (cdr (assoc obj (get-objects))))) 
 
+
 ;this will be used in describing hidden objects. if you come across something like your father's pistol, its natural that you'd think
-;of it then and there, not only when you pick it up. I'm worried that creates a schism between descriptions of places
+;of it then and there, not only when you pick it up. I'm worried that creates a schism between descriptions of places. Right now this is stupid and doesn't work, I haven't even added the correct
+;t/nil variable to objects. 
 (defun known-objp (obj)
   (nth 7 (cdr (assoc obj *inventory*)))) 
 
+
 (defun take (obj)
-  (when (equipp obj)
-      (push (assoc obj (get-objects)) *inventory*)
-      (remove-obj obj)
-      (print-description `(you take the ,obj and keep it with you.))))  
+  (when (and (equipp obj) (or (not (hiddenp obj)) (in-viewing-containerp obj)))
+    (push (assoc obj (get-objects)) *inventory*)
+    (remove-obj obj)
+    (print-description `(you take the ,obj and keep it with you.))))  
 
 ;this will work, equip/pickup do the same thing, but equip with something in inventory, and pickup with something in the map. whenever something is
 ;in hand you have access to its functions. I'm not sure I like this, maybe I should just give access to all items in inventory, and let the player
@@ -614,9 +715,9 @@
 ;a backpack, maybe there are some items that have to be equipped like a bomb, and others like a pistol that can just be drawn and used. 
 (defun equip (obj)
   (when (assoc obj *inventory*)
-    (when (character-holding *player*)
-      (unequip (character-holding *player*))
-      (setf (character-holding *player*) obj))
+    (when (person-holding *player*)
+      (unequip (person-holding *player*))
+      (setf (person-holding *player*) obj))
     (function-access obj)
     (print-description `(you hold the ,obj in your hand.))))
 
@@ -658,6 +759,20 @@
   (print-description (second (assoc obj (get-objects))))
   (fresh-line))
 
+(defun unhide-object (obj)
+  (setf (nth 5 (cdr (assoc obj (get-objects)))) nil))
+
+(defun hide-object (obj)
+  (setf (nth 5 (cdr (assoc obj (get-objects)))) t))
+
+(defun unhide-objects (objects)
+  (dolist (i objects)
+    (unhide-object i))) 
+
+(defun hide-objects (objects)
+  (dolist (i objects)
+    (hide-object i)))
+
 ;I'm going to try writing it like this. append each descritpion of the object in the room. this will assume that the descriptions are accurate 
 ;I'm not treating things like tables and such as objects. I really want a robust system where each object has a description, and objects ontop of it,
 ;or objects in it. a gun would have bullets in it. I could have show-surface `(there is a ,x and ,y and ,z on the ,surface). what I'm doing now allows for
@@ -677,6 +792,12 @@
 (defun get-containers ()
   (second (assoc (current-area) (cdr (assoc (current-location) *container-locations*)))))
 
+(defun list-containers ()
+  (let ((lst nil))
+    (dolist (i (get-containers))
+      (push i lst))
+    lst))
+
 (defun describe-containers ()
   (let ((lst nil))
     (dolist (i (get-containers))
@@ -687,8 +808,14 @@
 (defun list-containers ()
   (mapcar #'car (get-containers))) 
 
+(defun list-all-contents ()
+  (let ((contents nil))
+    (dolist (i (list-containers))
+      (push (list (list i (list-contents i))) contents))
+    (apply #'append contents)))
+
 (defun list-contents (container)
-  (nth 1 (cdr (assoc container (get-containers)))))
+  (second (cdr (assoc container (get-containers)))))
 
 (defun get-contents (container)
   (let ((lst nil))
@@ -701,41 +828,44 @@
   (let ((lst nil))
     (dolist (i (get-contents container))
       (push (third i) lst))
-    (print-description (apply #'append (reverse lst))))) 
+    (apply #'append (reverse lst))))
   
 
 ;the problem with this is it should keep showing open containers. this could be included in describe-containers, so that if any of them are open
 ;they display contents. 
 (defun open-> (container) 
-  (show-contents container)) 
-    
+  (setf (person-viewing *player*) container)
+;  (unhide-objects (list-contents container)) ;this puts all the objects into the regular description
+  ;which I'm not sure I want... and when you first open it. YUCK. 
+  (show-contents container))
+
+(defun close-> (container)
+  (setf (person-viewing *player*) nil))
+ ; (hide-objects (list-contents container)))
+
+;1-18-14
+;NOW I desparately need a function that lets me hide objects when someone moves away from
+;a container. 
+(defun describe-contents ()
+  (show-contents (car (assoc (person-viewing *player*) (get-containers)))))
+
+;====================================================================================
+;DESCRIBING THE AREA
+;====================================================================================
+
                       
 
-;(defmacro when (condition &rest body)
- ; `(if ,condition (progn ,@body)))
-;(when-cond ((test1 do1)) ((test2 do2))) this will work where multiple things might be true, and if they are they should be done. 
-;so clauses will be a list ((t1) (d2))
-;(defmacro when-cond (clauses) 
-;)  
-
-;quite inelegant. should this also list the objects? 
 (defun list-area ()
   (let ((lst nil))
-    (when (describe-area)
-      (push (describe-area) lst))
-    (when (on-street)
-      (push (describe-street) lst)
-      (dolist (i (get-street-routes))
-        (push (show-route i) lst)))
-    (when (show-characters)
-      (push (show-characters) lst))
-    (when (describe-containers)
-      (push (describe-containers) lst))
-    (when (show-objects)
-      (push (show-objects) lst))
-    (when (describe-paths)
-      (push (describe-paths) lst))
-;    (push (describe-area) lst)
+    (awhen-cond ((describe-contents) (push it lst))
+		((describe-area) (push it lst))
+		((on-street) 
+		 (dolist (i (describe-street)) (push i lst))
+		 (dolist (i (get-street-routes)) (push (show-route i) lst)))  
+		((show-persons) (push it lst))
+		((describe-containers) (push it lst))
+		((show-objects) (push it lst))
+		((describe-paths) (push it lst)))
     (reverse lst))) 
       
 
@@ -760,31 +890,31 @@
 
 ;NPCs and CONVERSATION
 ;======================================================================================================
-(defun show-characters1 (area location)
-  (dolist (i *characters*)
-    (if (and (equal area (character-area i)) 
-             (equal location (character-loc i)))
-        (return (character-appearance i)))) ) 
+(defun show-persons1 (area location)
+  (dolist (i *persons*)
+    (if (and (equal area (person-area i)) 
+             (equal location (person-loc i)))
+        (return (person-appearance i)))) ) 
 
-(defun show-characters ()
-  (dolist (i (list-characters))
-    (return (character-appearance i)))) ;watch this: it might not work for printing multiple characters. 
+(defun show-persons ()
+  (dolist (i (list-persons))
+    (return (person-appearance i)))) ;watch this: it might not work for printing multiple persons. 
 
-(defun list-characters ()
+(defun list-persons ()
   (let ((lst nil))
-    (dolist (i *characters*)
-      (if (equal (character-location *player*)
-                 (character-location i))
+    (dolist (i *persons*)
+      (if (equal (person-location *player*)
+                 (person-location i))
           (push i lst)))
     lst))
 
-(defun list-character-names ()
+(defun list-person-names ()
   (let ((lst nil))
-    (dolist (i (list-characters))
-      (push (character-name i) lst))
+    (dolist (i (list-persons))
+      (push (person-name i) lst))
     lst))
 
-;write a function that generates a group of characters. maybe nazi soldiers, or maybe 
+;write a function that generates a group of persons. maybe nazi soldiers, or maybe 
 
 ;GAMEPLAY
 ;=======================================================================================================
@@ -798,7 +928,7 @@
   (random (1+ ammo))) 
 
 ;EVENTS
-;events will happen on the street, will have their own description added, and may add characters to the area. likelihood of certain events increases based on time of day, 
+;events will happen on the street, will have their own description added, and may add persons to the area. likelihood of certain events increases based on time of day, 
 ;length of occupation, and length of distance being traveled. 
 
 
@@ -807,7 +937,7 @@
 
 
 (defun play ()
-  (print-description (describe-location))
+;  (print-description (describe-location))
   (display-room)
   (format t "~%- ")
   (let ((read (parse (read-list))))
@@ -816,6 +946,7 @@
         (let ((obj nil))
           (cond ((find-area read) (setf obj (find-area read)))
                 ((find-location read) (setf obj (find-location read)))
+                ((find-entrance read) (setf obj (entrance)))
                 ((find-object read) (setf obj (find-object read)))
                 ((find-direction read) (setf obj (closest-along-route (find-direction read))))
                 ((find-inventory read) (setf obj (find-inventory read)))
@@ -833,15 +964,16 @@
       (if (or (equal i 'quit)
               (member i *commands*)
               (member i *synonyms-list*)
-              (member i (list-character-names))
+              (member i (list-person-names))
               (member i (get-object-names))
-              (member i (character-inventory *player*))
+              (member i (person-inventory *player*))
               (member i (directions-list)) 
               (member i (list-inventory))
               (member i (list-containers))
               ;write one for paths. opening a door should be the same as going to that area, so list-area handles things like go to bathroom, but not
               ;open the door to the bathroom. 
               (member i (list-locations))
+              (member i *entrance-synonyms*)
               (member i (list-areas)))
           (push i cmd)))
     (reverse cmd)))
@@ -870,6 +1002,9 @@
 (defun find-location (parsed-phrase)
   (find-in-phrase parsed-phrase (list-locations)))
 
+(defun find-entrance (parsed-phrase)
+  (find-in-phrase parsed-phrase *entrance-synonyms*))
+
 (defun find-direction (parsed-phrase)
   (find-in-phrase parsed-phrase (directions-list)))
 
@@ -886,16 +1021,21 @@
 (defun do-command (cmd obj)
   (cond ((and (not (on-street)) (equal cmd 'walk)) (change-area1 obj))
         ((and (not (on-street)) (null cmd) (member obj (list-areas))) (change-area1 obj))
-        ((and (on-street) (equal cmd 'walk)) (change-location1 obj))
+        ((and (on-street) (equal cmd 'walk) (member obj (list-locations))) (change-location1 obj))
+        ;this handles saying go inside, or walk inside which is essentially a synonym of enter, find another way to treat it as such? 
+        ((and (on-street) (equal cmd 'walk) (equal obj (entrance))) (change-area1 obj)) ;need to check to see if obj is in, inside, in-side, or something else? 
         ((and (on-street) (null cmd)) (change-location1 obj));this is bad cause there's no way to check
         ((and (on-street) (equal cmd 'enter) (null obj)) (change-area1 (entrance))) ;enter is a distinct command from walk, but i'm not sure it should be
-        ((and (on-street) (equal cmd 'enter)) (change-area1 obj))
+        ((and (on-street) (equal cmd 'enter) (equal obj (current-location))) (change-area1 (entrance))) 
+        ((and (on-street) (equal cmd 'enter) (equal obj (entrance))) (change-area1 obj)) ;this one is error prone, must have a check to make sure that obj is a list of areas.
+        ;need to create a clear idea of where a building can be entered so player isn't temped to try other entrances. Don't make it too static though. 
+        ;I also need to be able to say something like Enter through the front, or go inside. 
         ((equal cmd 'time) (show-time))
         ((equal cmd 'take) (take obj))  
         ((equal cmd 'equip) (equip obj)) 
         ((equal cmd 'open) (open-> obj))
         ((equal cmd 'inventory) (show-inventory))
-        ((equal cmd 'inspect) (inspect-object obj)))) ;I'm not sure that I want on-street to handle the descriptive part. 
+        ((equal cmd 'inspect) (inspect-object obj)))) ;I'm not sure that I want on-street to handle the descriptive part.  
 
 ;this will prompt the player for a line, turn it into a list of chars, go through the whole list and as long as a space is not encountered
 ;cons that letter into a list; once a space is encountered it'll coerce that list of chars into a string, read-from-string on it and put it
@@ -917,35 +1057,11 @@
 
 ;write a save/sleep function. This will have to write to a document. will need to save the instance of player
 ;strutcture. So should I write other variables, or just add to that strucure. I'll need to include missions that have been
-;completed, characters that have died, and also changes to the environment (such as cutting cable of eiffel tower). 
+;completed, persons that have died, and also changes to the environment (such as cutting cable of eiffel tower). 
 
 
 ;load function, will read from a document. 
 
-
-;UTILITY FUNCTIONS
-;========================================================================================
-
-;Clean up text. Why does this give me (t t) everytime? 
-(defun tweak-text (lst caps lit)
-  (when lst
-    (let ((item (car lst))
-          (rest (cdr lst)))
-      (cond ((eql item #\space) (cons item (tweak-text rest caps lit)))
-            ((member item '(#\! #\? #\.)) (cons item (tweak-text rest t lit)))
-            ((eql item #\") (tweak-text rest caps (not lit)))
-            (lit (cons item (tweak-text rest nil lit)))
-            (caps (cons (char-upcase item) (tweak-text rest nil lit)))
-            (t (cons (char-downcase item) (tweak-text rest nil nil))) ) ) ) )
-
-(defun print-description (lst)
-  (princ (coerce (tweak-text (coerce (string-trim "() "
-                                                  (prin1-to-string lst))
-                                     'list)
-                             t
-                             nil)
-                 'string))
-  (fresh-line))
 
 
 ;CREATION FUNCTIONS this is how a user can use the engine.  
@@ -953,6 +1069,8 @@
 (defun create-location ()
   (push (list (name-location) (create-area)) *map*)) ;I need to make sure that this saves the map. 
   
+
+
 (defun name-location ()
   (read)) 
 
@@ -1000,13 +1118,25 @@
     (delete (assoc obj (second (assoc area (cdr (assoc loc *object-locations*)))))
             (second (assoc area (cdr (assoc loc *object-locations*)))))))
                    
-;GACKGACKGACK
+; must also remove from contents of a container. 1-19-14
+(defun remove-from-container (obj)
+  (dolist (i (list-all-contents)) ;this will find what container the object is in. 
+    (when (member obj (second i))
+      (let ((container (car i)))
+	(setf (second (cdr (assoc container (get-containers))))
+	      (remove obj (second (cdr (assoc container (get-containers))))))))))
+	
+;GACKGACKGACK 
 (defun remove-obj (obj)
+  (remove-from-container obj) 
   (if (member obj (car (get-objects)))
       (setf (second (assoc (current-area) (cdr (assoc (current-location) *object-locations*))))
             (cdr (second (assoc (current-area) (cdr (assoc (current-location) *object-locations*))))))
     (delete (assoc obj (second (assoc (current-area) (cdr (assoc (current-location) *object-locations*)))))
-            (second (assoc (current-area) (cdr (assoc (current-location) *object-locations*))))))) 
+            (second (assoc (current-area) (cdr (assoc (current-location) *object-locations*)))))))
             
 ;write some general functions that'll give me a particular part of a list such as *map*. THis'll help clean up the code
 ;and make this more of an engine than a particular game, because it has to be easy to read if its gonna be reused. 
+
+;this is for blowing up a safe or something. 
+(defun remove-container (container) )
