@@ -286,10 +286,16 @@
 (defparameter *items* nil)
 
 ;containers can be inspected for a description, or opened for a list of contents. ending value is if its locked or not. also add one for hidden, like a wall-safe? first
-;is now hidden, second is being viewed, third is locked
+;is now hidden, second is being viewed, third is locked, fourth equippable
+;There's some overlap between containers and objects I think. Example: briefcase, it contains
+;items, but its also something equippable. add a fourth value for equippable? 
 (defparameter *container-locations* '((home (bedroom
                                              ((dresser (your dresser stands in the corner containing various possessions of yours.)
-                                                      (bible pistol journal) bedroom home nil nilnil))))))
+                                                      (bible pistol journal) bedroom home nil nilnil nil))))
+				      (cafe (basement
+					     ((briefcase (sitting under the table is a briefcase.)
+							 (pamphlets) cafe basement
+							 nil nil t t))))))
                                          
                                  
                         
@@ -576,8 +582,8 @@
 
 (defun change-location1 (location)
   (distance-time location)
-  (setf (second (person-location *player*)) location)
-  (print-description (describe-location)))
+  (setf (second (person-location *player*)) location))
+ ; (print-description (describe-location)))
 ;  (change-area1 (car (third (assoc (current-location) *map*)))))
 
 (defun change-area ()
@@ -703,11 +709,17 @@
   (nth 7 (cdr (assoc obj *inventory*)))) 
 
 
-(defun take (obj)
-  (when (and (equipp obj) (or (not (hiddenp obj)) (in-viewing-containerp obj)))
-    (push (assoc obj (get-objects)) *inventory*)
-    (remove-obj obj)
-    (print-description `(you take the ,obj and keep it with you.))))  
+(defun take (obj) 
+  (when (and (or (equipp obj) (container-equipp obj))
+	     (or (not (hiddenp obj)) (in-viewing-containerp obj)))
+    (cond ((assoc obj (get-objects))
+	   (push (assoc obj (get-objects)) *inventory*)
+	   (remove-obj obj))
+	  ((assoc obj (get-containers))
+	   (push (assoc obj (get-containers)) *inventory*)
+	   (remove-container obj))
+    (print-description `(you take the ,obj and keep it with you.))))) 
+
 
 ;this will work, equip/pickup do the same thing, but equip with something in inventory, and pickup with something in the map. whenever something is
 ;in hand you have access to its functions. I'm not sure I like this, maybe I should just give access to all items in inventory, and let the player
@@ -791,6 +803,9 @@
 
 (defun get-containers ()
   (second (assoc (current-area) (cdr (assoc (current-location) *container-locations*)))))
+
+(defun container-equipp (container)
+  (nth 7 (cdr (assoc container (get-containers)))))
 
 (defun list-containers ()
   (let ((lst nil))
@@ -894,8 +909,10 @@
   (dolist (i *persons*)
     (if (and (equal area (person-area i)) 
              (equal location (person-loc i)))
-        (return (person-appearance i)))) ) 
+        (return (person-appearance i))))) 
 
+;1-19-14
+;this isn't working too hot right now, its calling on the wrong part of description. 
 (defun show-persons ()
   (dolist (i (list-persons))
     (return (person-appearance i)))) ;watch this: it might not work for printing multiple persons. 
@@ -1069,8 +1086,6 @@
 (defun create-location ()
   (push (list (name-location) (create-area)) *map*)) ;I need to make sure that this saves the map. 
   
-
-
 (defun name-location ()
   (read)) 
 
@@ -1138,5 +1153,16 @@
 ;write some general functions that'll give me a particular part of a list such as *map*. THis'll help clean up the code
 ;and make this more of an engine than a particular game, because it has to be easy to read if its gonna be reused. 
 
-;this is for blowing up a safe or something. 
-(defun remove-container (container) )
+;this is for blowing up a safe or something. Gameplay version. Write a separate creating version.
+(defun remove-container (container) 
+  (if (member container (car (get-containers)))
+      (setf (second (assoc (current-area) 
+			   (cdr (assoc (current-location) *container-locations*))))
+	    (cdr  (second (assoc (current-area) 
+				 (cdr (assoc (current-location) *container-locations*))))))
+      (delete 
+       (assoc container (second (assoc (current-area) 
+				       (cdr (assoc (current-location) *container-locations*)))))
+       (second (assoc (current-area) 
+		      (cdr (assoc (current-location) *container-locations*)))))))
+      
