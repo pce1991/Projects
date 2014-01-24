@@ -235,25 +235,42 @@
 ;should it turn itself off, like in a book if an author forgot to have a character close the refrigerator after opening it, I'm 
 ;not sure I'd be bothered, or even notice. However in a game this might be expected by some, but others might find it jarring like
 ;me. Add descriptors after the change-state function.   
+;I could add command-names to the function names, so save-game would be (save-game sleep) (set-state turn-on turn-off)
+;is change-state implicit? if its a feature you can interact with it. but it isn't necessarily all that you can do.
+;it doesn't make sense for a bed to have a state. I guess some features might be static nut still capable of interaction. 
+;other interactions should have their own descriptions right? so maybe the state of the bed doesn't matter, but sleeping
+;might trigger a description. do I include all the the synonyms in here along with set-state and change-state? I could ` ,@ it in.
+;multiple functions can be triggered by a state change, so put them in a list at car instead of just set-state. example. need to
+;change the functions so that they do not just the first, but everything in the first. 
+;elevator will change player's location when its activated. 
 (defparameter *area-features* '((home
 				 (bedroom 
 				  (bed (there rests your bed in the corner.)
 				       (its not a particularly comfortable bed but its a great relief to sleep in
 					    even a little comfort. certainly better than the cots or mats most soldiers sleep on.)
 				       nil (nil (you lay down onto your easement.) ()) 
-				       (save-game))) ;how will the state-description work with save-game? 
+				       ((save-game sleep))) ;how will the state-description work with save-game? 
+				  (radio (the radio sits silently ontop of the small bookshelf.)
+					 (its very dangerous to be found with any sort of anti-nazi literature on your person.
+					      they cant manage to crack down on the radio-listing though since you cant be caught 
+					      in possession of airwaves.)
+					 nil (nil (the switch snaps and the speakers crack and then the projection fills the room.)
+						  (as quickly as it spread out it drops off and your ears refocus on the noise of the 
+						      outside world.))
+					 (((set-state 'radio t) turn-on) ((set-state 'radio nil) turn-of)))) 
+				        ;include a function thats searches for a random broadcast, and then plays it. 
 				 (bathroom 
 				  (faucet ()
 					  (a sink. the most conveinent delivery of the most important need. such a fragile infastructure
 					     that the nazis likely control whether it flows or not.)
-					  nil (nil (water flows from the faucet.) ()) 
-					  (change-state))
+					  nil (nil (water flows from the faucet.) (you stop the flow of water.)) 
+					  (((set-state 'faucet t) turn-on) ((set-state 'faucet nil) turn-off)))
 				  (bathtub (filling up most of the room is the bathtub.)
 					   (the porcelin is not too clean but it seems pointless to clean it. you doubt that youll
 						be around to enjoy the soak that many mores times.)
 					   nil (nil (the water flows from the spout and rushes against the stop until it juse falls
-							 into itself and soon the tub is filled.) ())
-					   (change-state)))) 
+							 into itself and soon the tub is filled.) (the cascade halts.))
+					   (((set-state 'bathtub t) turn-on) ((set-state 'bathtub nil) turn-off)))))
 				
 				(eiffel-tower 
                                  (bottom 
@@ -261,19 +278,22 @@
 					(the lift turns what is a rather long way to climb into a slow and pleasant ascent over the
 					     whole of Paris.)
 					nil (nil (the lift begins its climb to the top of the tower.) ())
-					(change-state))
+					((change-state activate)))
 				  (elevator-cable (there is the cable suspending the lift.)
 						  (with the right kind of tool you could probably cut the cable.)
 						  t (t () (the cable is cut rendering the elevator useless.
-							       its a long climb to the top now. too long for Hitler.) (change-state)))) 
+							       its a long climb to the top now. too long for Hitler.) 
+						       ((change-state cut)))))
 				 
                                  (top (flagpole nil (t (that hated shape of the nazis rides on a sharp red wave in the wind
-							 over all Paris.) (the flagpole is bare.)) (change-state))))) ) 
+							 over all Paris.) (the flagpole is bare.)) 
+						(((set-state 'flagpole nil) lower-flag)
+						 ((set-state 'flagpole t) raise-flag))))) )) 
 					;these could just be on/off functions, so just abstract it. 
 				 ;this can't use the generic though, because it'll have a t value, but with one flag, a nil when
 				 ;you lower it, and then a second when the french flag is raised. write a function that can 
 				 ;overwrite description, and in the case of a flag, it might have this function which contains
-				 ;its own description to be added. 
+				 ;its own description to be added. so maybe the command raise-flag does more that just set-state. 
 				
 
 
@@ -372,16 +392,16 @@
 (defparameter *container-locations* '((home 
 				       (bedroom
 					(dresser (your dresser stands in the corner containing various possessions of yours.)
-						 (journal bible pistol) bedroom home nil nil nil nil)
-					(cabinet (your cabinet is mounted to the wall.) ;just one cabinet? not very realistic, but is that how I operate
+						 (journal bible pistol) nil nil nil nil)
+					(cabinet (a cabinet is mounted to the wall. its contents dictated to you by the occupiers.) ;just one cabinet? not very realistic, but is that how I operate
 					;in my kitchen?how does the mind process it? Don't want tedious description
 						 (wine baguette butter) nil nil nil nil))
 				       (bathroom 
 					(cabinet (behind the mirror is a nook for your toiletries. strange to be at war and still have these luxuries.) ;easements?
-						 (cologne shaving-cream razor-blade razor))))
+						 (cologne shaving-cream razor-blade razor) nil nil nil nil)))
 				      (cafe (basement
 					     (briefcase (sitting under the table is a briefcase.)
-							(pamphlets) cafe basement
+							(pamphlets) 
 							 nil nil t t)))))
                                          
                                              
@@ -417,13 +437,15 @@
 
 
 
-
 (defparameter *player* (make-person
                         :name '(Jacques Gallion)
                         :appearance '(your standard frenchman though strungout by the occupation)
                         :location '(bedroom home))) 
 
-(defparameter *commands* '(save time enter exit explore inspect walk back pickup use talk open close consider equip take inventory drop put)) ;consider? this might give you clues when reading memos or something. put in, put on.  
+(defparameter *commands* '(save time enter exit explore inspect walk back pickup use talk open close consider equip take inventory drop put
+			   change-state)) ;consider? this might give you clues when reading memos or something. put in, put on.  
+
+;write a synonym for change-state, or maybe some commands in this list just translate to change-state? or they do if the object is a feature? 
 
 ;does open work on doors and containers. does pickup work like inspect on items that can't be inventoried. 
 
@@ -431,7 +453,8 @@
                                    (walk (travel move go goto go-to))
                                    (inspect (investigate look-at lookat view check-out checkout check search scan watch see))
                                    (time (watch clock hour minute))
-                                   (take (keep pocket store))))
+                                   (take (keep pocket store))
+				   ))
 
 ;this will be used to store the history of a playthrough, and then you can replay a game to that point. useful for testing.
 ;could also serve as a save function. 
@@ -493,6 +516,12 @@
 (defparameter *days-since-occupation* (+ 150 (random 400))) ;I don't actually know how many days it should be. maybe the game should have chapters that are years or seasons
 ;this could help divide the world up, so you're in the country at one part, then maybe you're in paris, and then later the unoccupied zone, etcetera. 
 
+
+;new events will be created each time you change location. events will have factors like number of people, what they're doing, 
+;and will also have stats like how long you have to do something. how to get events to be influenced by others? events will have
+;to be saved as well, and triggered in the right order when loading a game. 
+(defstruct event 
+  )
 
 ;==============================================================================================================================================================
 ;TIME and SIMULATION
@@ -769,7 +798,7 @@
     (reverse lst))) 
 
 (defun describe-feature (feature)
-  (car (cdr (assoc feature (get-features)))))
+  (car (cdr (assoc feature (get-features))))) 
 
 ;some features will be nil, things that don't really deserve a whole mention except in the general area description perhaps? 
 ;but that isn't really kosher. maybe do this rarely, like with the faucet. its a nice feature to allow at least, even if its ugly. 
@@ -781,33 +810,115 @@
 	  (push (describe-feature i) lst)))
     (apply #'append (reverse lst)))) 
 
+;gets list of the state and the two descriptors attached to the t and nil state-values. 
 (defun get-descriptors (feature)
-  (nth 3 (cdr (assoc feature (get-features)))))
-
-;this will only work if player is in the room with the feature. REWRITE
-(defun get-functions (feature)
-  (nth 4 (assoc feature (get-features))))  
-
+  (nth 3 (cdr (assoc feature (get-features))))) 
 
 ;--------------------------------------------------
 ;Feature Functions
 ;--------------------------------------------------
+;make sure that a feature can have multiple functions that can be accessed.
+
 ;make this a more general change-state function? where will the effects of it come from? it could reveal items,
 ;areas/locations, characters,complete a mission, destroy someting. maybe objects/features like this will have a t/nil value
 ;which describes their state, and then a description of what happends when they're activated. This doesn't cover all things
 ;that features might do, but it covers a lot of binary cases. One critical area here is to create appropiate synonym for 
 ;how the state is changed. This is necessary for description and for allowing the player to describe the appropiate actions. 
 ;does this entail a permanent change, where its always on, or maybe its on for a duration? or just on then off? 
-(defun change-state (feature)
+(defun describe-state (feature)
   (let ((descr (get-descriptors feature)))
     (cond ((and (second descr) (car descr)) (second descr))
 	  ((and (third descr) (not (car descr))) (third descr)))))
+  
+
+;write a macro for this so i don't have to write all the assocs and setf. 
+(defun change-state (feature)
+  (setf (car (nth 3 (cdr (assoc feature (cdr (assoc (current-area) (cdr (assoc (current-location) *area-features*))))))))
+	(null (car (nth 3 (cdr (assoc feature (cdr (assoc (current-area) (cdr (assoc (current-location) *area-features*))))))))))
+  (if (describe-state feature)
+       (print-description (describe-state feature))))
+
+(defun set-state (feature state)
+  (setf (car (nth 3 (cdr (assoc feature (cdr (assoc (current-area) (cdr (assoc (current-location) *area-features*))))))))
+	state)
+  (if (describe-state feature)
+       (print-description (describe-state feature))))
+
+;this will only work if player is in the room with the feature. REWRITE
+(defun get-feature-functions/commands (feature)
+  (nth 4 (cdr (assoc feature (get-features))))) 
+
+(defun list-all-functions ()
+  (let ((lst nil))
+    (dolist (i (list-features))
+      (dolist (fun (get-feature-functions/commands i))
+	(push fun lst)))
+    lst))
+
+;also create a list of synonyms. this will grab things like "sleep" from save-game function, and add that to the command
+;rather than something like change-state. 
+(defun get-feature-commands (feature)
+  (let ((lst nil))
+    (dolist (fun (get-feature-functions/commands feature))
+      (dolist (cmd (cdr fun))
+	(push cmd lst)))
+    lst))
+
+;this doesn't associate it with a command though :(
+(defun get-feature-functions (feature)
+  (let ((lst nil))
+    (dolist (i (get-feature-functions/commands feature))
+      (push (car i) lst))
+    lst))
+  
+
+;maybe remove duplicates? I'm not sure it matters much though. Use union to remove duplicates. 
+(defun list-all-feature-commands () 
+  (let ((lst nil))
+    (dolist (feat (list-features))
+      (push (get-feature-commands feat) lst))
+    (apply #'append lst)))
+
+(defun add-feature-commands ()
+  (dolist (feat (list-features))
+    (if (not (hidden-feature-p feat))
+	(dolist (cmd (get-feature-commands feat))
+	  (push cmd *commands*)))))
+
+(defun remove-feature-commands ()
+  (dolist (i *commands*)
+    (if (member i (list-all-feature-commands))
+	(setf *commands*
+	      (remove i *commands*)))))
 
 
-;this will be for permanent changes, like cutting a cable. maybe it isn't necessary, and actually restrictive since I
-;might want to bring the cable back. 
-(defun alter-state (feature)
-)
+;add these to *commands* as long as the player is in the room with the feature. put this in play?
+(defun access-feature-functions (feature) 
+  (dolist (i (list-features))
+    (if (not (hidden-feature-p i))
+	(dolist (fun (get-feature-functions/commands i))
+	  (push fun *commands*)))))
+
+(defun restrict-feature-functions (feature)
+  (dolist (i *commands*)
+    (if (member i (list-all-functions))
+	(setf *commands*
+	      (remove i *commands*))))) 
+
+;this will make sure that the command fits the feat, if it doesn't then nothing happens (or trigger an error msg). 
+;include triggering the command here? 
+(defun command-match-feature (cmd feat)
+  (if  (member cmd (get-feature-commands feat))
+       t
+       nil)) 
+
+
+;and do the commands. 
+(defun match-command-feature-function (cmd feat)
+  (dolist (fun (get-feature-functions/commands feat))
+    (if (member cmd fun)
+	(eval (car fun)))))
+    
 
 
 
@@ -878,25 +989,25 @@
     (when (person-holding *player*)
       (unequip (person-holding *player*))
       (setf (person-holding *player*) obj))
-    (function-access obj)
+    (object-function-access obj) 
     (print-description `(you hold the ,obj in your hand.))))
 
 ;call this whenever an item is currently equipped, and a new one is called. 
 (defun unequip (obj)
-  (function-no-access obj)) 
+  (function-no-access obj))  
 
 ;does this need to check to see if an item. let this happen to items that can't be equipped, so you just leave it behind when you move,
 ;or drop it when you pick something else up. 
 (defun pickup (obj)
   (print-description `(you pick up the ,obj)) 
-  (function-access obj))
+  (object-function-access obj))
 
 (defun drop (obj)
   (function-no-access obj))
 
 
 ;will also need a function to remove these commands though. 
-(defun function-access (obj)
+(defun object-function-access (obj)
   (nconc *commands* (function-names obj))) 
 
 ;this might cause a problem if there are commands that have the same name, or perhaps a synonym. 
@@ -1157,8 +1268,11 @@
 ;=======================================================================================================
 
 
+;include checks here for access to object-functions, and do feature-commands!. don't actually need to with objects
+;beccause its added when put in inventory, or if being held. 
 (defun play ()
 ;  (print-description (describe-location))
+  (add-feature-commands) ;more efficient if I added this to change-area...  
   (display-room)
   (format t "~%- ")
   (let ((read (parse (read-list))))
@@ -1171,7 +1285,8 @@
                 ((find-object read) (setf obj (find-object read)))
                 ((find-direction read) (setf obj (closest-along-route (find-direction read))))
                 ((find-inventory read) (setf obj (find-inventory read)))
-                ((find-container read) (setf obj (find-container read))))
+                ((find-container read) (setf obj (find-container read)))
+		((find-feature read) (setf obj (find-feature read))))
           (do-command cmd obj)))
       (play)))) 
   
@@ -1191,6 +1306,7 @@
               (member i (directions-list)) 
               (member i (list-inventory))
               (member i (list-containers))
+	      (member i (list-features))
               ;write one for paths. opening a door should be the same as going to that area, so list-area handles things like go to bathroom, but not
               ;open the door to the bathroom. 
               (member i (list-locations))
@@ -1238,6 +1354,9 @@
 (defun find-container (parsed-phrase) 
   (find-in-phrase parsed-phrase (list-containers)))
 
+(defun find-feature (parsed-phrase)
+  (find-in-phrase parsed-phrase (list-features)))
+
 ;should I add some error messages in here? 
 (defun do-command (cmd obj)
   (push (list cmd obj) *command-history*) ;this probably isn't the best place to do it as somegame-times cmd will be nil. 
@@ -1257,7 +1376,14 @@
         ((equal cmd 'equip) (equip obj)) 
         ((equal cmd 'open) (open-> obj))
         ((equal cmd 'inventory) (show-inventory))
+
+	((command-match-feature cmd obj) (match-command-feature-function cmd obj))
+
         ((equal cmd 'inspect) (inspect-object obj)))) ;I'm not sure that I want on-street to handle the descriptive part.  
+
+;With features, I add all the recognized commands to the list, but those commands need to be converted to the appropriate 
+;set/change-state command. so turn-on might be passed to parser, but should be converted to (set-state t)?
+
 
 ;this will prompt the player for a line, turn it into a list of chars, go through the whole list and as long as a space is not encountered
 ;cons that letter into a list; once a space is encountered it'll coerce that list of chars into a string, read-from-string on it and put it
@@ -1375,4 +1501,3 @@
 				       (cdr (assoc (current-location) *container-locations*)))))
        (cdr (assoc (current-area) 
 		      (cdr (assoc (current-location) *container-locations*))))))) 
-		      
