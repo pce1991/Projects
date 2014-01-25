@@ -84,6 +84,10 @@
 (defun end (lst)
   (car (last lst)))
 
+(defun random-elt (choices)
+  "Choose and element from a list of random"
+  (elt choices (random (length choices))))
+
 ;=================================================================================================================
 ;GLOBAL VARIABLES AND STRUCTURES 
 ;=================================================================================================================
@@ -118,7 +122,8 @@
                        (front (a couple soldiers stand in front speaking in German while some young girls chat and a family walks away from
                                  the theatre.))
                        (lobby ) 
-                       (theatre-un )
+                       (theatre-un ) ;these will each have boring descriptions, but a projector feature in the theatre (hidden from player)
+		                     ;will be flipped on when they enter, and will have a function displaying a random movie. 
                        (theatre-deux )
                        (theatre-trois ))
                       (church 
@@ -250,27 +255,31 @@
 					    even a little comfort. certainly better than the cots or mats most soldiers sleep on.)
 				       nil (nil (you lay down onto your easement.) ()) 
 				       ((save-game sleep))) ;how will the state-description work with save-game? 
-				  (radio (the radio sits silently ontop of the small bookshelf.)
+				  (radio (your radio sits ontop of the small bookshelf.)
+					 ;used to say silently, but had to change 
+					 ;because that doesn't make sense when its
+					 ;on. find a way to edit it. 
 					 (its very dangerous to be found with any sort of anti-nazi literature on your person.
 					      they cant manage to crack down on the radio-listing though since you cant be caught 
 					      in possession of airwaves.)
 					 nil (nil (the switch snaps and the speakers crack and then the projection fills the room.)
 						  (as quickly as it spread out it drops off and your ears refocus on the noise of the 
 						      outside world.))
-					 (((set-state 'radio t) turn-on) ((set-state 'radio nil) turn-of)))) 
+					 ((((set-state 'radio t) (play-radio)) turn-on) 
+					  (((set-state 'radio nil) (silence)) turn-off)))) 
 				        ;include a function thats searches for a random broadcast, and then plays it. 
 				 (bathroom 
 				  (faucet ()
 					  (a sink. the most conveinent delivery of the most important need. such a fragile infastructure
 					     that the nazis likely control whether it flows or not.)
 					  nil (nil (water flows from the faucet.) (you stop the flow of water.)) 
-					  (((set-state 'faucet t) turn-on) ((set-state 'faucet nil) turn-off)))
+					  ((((set-state 'faucet t)) turn-on) (((set-state 'faucet nil)) turn-off)))
 				  (bathtub (filling up most of the room is the bathtub.)
 					   (the porcelin is not too clean but it seems pointless to clean it. you doubt that youll
 						be around to enjoy the soak that many mores times.)
 					   nil (nil (the water flows from the spout and rushes against the stop until it juse falls
 							 into itself and soon the tub is filled.) (the cascade halts.))
-					   (((set-state 'bathtub t) turn-on) ((set-state 'bathtub nil) turn-off)))))
+					   ((((set-state 'bathtub t)) turn-on) (((set-state 'bathtub nil)) turn-off)))))
 				
 				(eiffel-tower 
                                  (bottom 
@@ -278,17 +287,17 @@
 					(the lift turns what is a rather long way to climb into a slow and pleasant ascent over the
 					     whole of Paris.)
 					nil (nil (the lift begins its climb to the top of the tower.) ())
-					((change-state activate)))
+					((((change-state)) activate)))
 				  (elevator-cable (there is the cable suspending the lift.)
 						  (with the right kind of tool you could probably cut the cable.)
 						  t (t () (the cable is cut rendering the elevator useless.
 							       its a long climb to the top now. too long for Hitler.) 
-						       ((change-state cut)))))
+						       ((((change-state)) cut)))))
 				 
                                  (top (flagpole nil (t (that hated shape of the nazis rides on a sharp red wave in the wind
 							 over all Paris.) (the flagpole is bare.)) 
-						(((set-state 'flagpole nil) lower-flag)
-						 ((set-state 'flagpole t) raise-flag))))) )) 
+						((((set-state 'flagpole nil)) lower-flag)
+						 (((set-state 'flagpole t)) raise-flag))))) )) 
 					;these could just be on/off functions, so just abstract it. 
 				 ;this can't use the generic though, because it'll have a t value, but with one flag, a nil when
 				 ;you lower it, and then a second when the french flag is raised. write a function that can 
@@ -391,7 +400,7 @@
 ;items, but its also something equippable. add a fourth value for equippable? 
 (defparameter *container-locations* '((home 
 				       (bedroom
-					(dresser (your dresser stands in the corner containing various possessions of yours.)
+					(dresser (a dresser stands in the corner containing various possessions of yours.)
 						 (journal bible pistol) nil nil nil nil)
 					(cabinet (a cabinet is mounted to the wall. its contents dictated to you by the occupiers.) ;just one cabinet? not very realistic, but is that how I operate
 					;in my kitchen?how does the mind process it? Don't want tedious description
@@ -815,7 +824,7 @@
   (nth 3 (cdr (assoc feature (get-features))))) 
 
 ;--------------------------------------------------
-;Feature Functions
+;Feature Function and Command retrieval
 ;--------------------------------------------------
 ;make sure that a feature can have multiple functions that can be accessed.
 
@@ -912,15 +921,46 @@
        t
        nil)) 
 
-
 ;and do the commands. 
 (defun match-command-feature-function (cmd feat)
   (dolist (fun (get-feature-functions/commands feat))
     (if (member cmd fun)
-	(eval (car fun)))))
-    
+	(dolist (f (car fun))
+	  (eval f))))) 
+
+;--------------------------------------------------
+;FEATURE FUNCTIONS
+;--------------------------------------------------
+
+;this has the deficit of only being allowed to have one noise, not simeltaneous noises.
+(defparameter *noise* nil)
 
 
+(defparameter *stations* '(
+			   (Radio-Londres 
+			    (a sombre melody issues forth.)
+			    (a jazzy tune bops about the room.)
+			    (you are notified by the announcer that John has a long
+			     mustache.)
+			    (you hear a calm and matter of fact announcement that
+			     the insurance agency is on fire.))))
+;include messages and news reports that only play on certain days. do the same thing
+;to the newspaper object. 	
+		    
+
+(defun describe-noise ()
+  *noise*)
+
+;RADIO. 
+;it will need to continue playing after the first 
+(defun play-radio ()
+  (let ((audio 
+	 (random-elt (cdr (assoc 'radio-londres *stations*)))))
+    (setf *noise* audio)))
+
+
+(defun silence ()
+  (setf *noise* nil))
 
 ;==================================================================================================================================
 ;OBJECTS
@@ -1133,6 +1173,7 @@
 (defun list-area ()
   (let ((lst nil))
     (awhen-cond ((describe-contents) (push it lst))
+		((describe-noise) (push it lst)) ;this makes sense, you'd hear something as you approach before you see it. 
 		((describe-area) (push it lst))
 		((on-street) 
 		 (dolist (i (describe-street)) (push i lst))
