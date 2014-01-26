@@ -155,6 +155,9 @@
 		       )
 		      (bank 
 		       )
+		      (train-station
+		       (telegram-office ())
+		       )
                       
                       ;include La Place Blanche café, reserved for germans exclusively. experiment in preventing access to a place. you can only stand
                       ;in front of it. 
@@ -254,7 +257,7 @@
 				       (its not a particularly comfortable bed but its a great relief to sleep in
 					    even a little comfort. certainly better than the cots or mats most soldiers sleep on.)
 				       nil (nil (you lay down onto your easement.) ()) 
-				       ((save-game sleep))) ;how will the state-description work with save-game? 
+				       ((((save-game)) sleep))) ;how will the state-description work with save-game? 
 				  (radio (your radio sits ontop of the small bookshelf.)
 					 ;used to say silently, but had to change 
 					 ;because that doesn't make sense when its
@@ -286,11 +289,15 @@
 				  (lift (the empty lift rests ready to move along the tower.) 
 					(the lift turns what is a rather long way to climb into a slow and pleasant ascent over the
 					     whole of Paris.)
-					nil (nil (the lift begins its climb to the top of the tower.) ())
-					((((change-state)) activate)))
-				  (elevator-cable (there is the cable suspending the lift.)
+					nil (nil (the lift begins its climb to the top of the tower.) 
+						 (the lift sinks down as your stomach rises.)) ;the state reflects moving up or down? 
+					((((change-state 'lift) 
+					   (activate-lift 'lift 'bottom 'top)) activate))) 
+					;so I need a function that can move features between locations/areas. 
+				  ;also need an elevator function that'll use change-area1. 
+				  (lift-cable (there is the cable suspending the lift.)
 						  (with the right kind of tool you could probably cut the cable.)
-						  t (t () (the cable is cut rendering the elevator useless.
+						  t (t () (the cable is cut rendering the lift useless.
 							       its a long climb to the top now. too long for Hitler.) 
 						       ((((change-state)) cut)))))
 				 
@@ -353,7 +360,7 @@
 				      (bible (your parents bible. a family heirloom you suppose. though you never revered it much. 
 						   Its focus is on a people who arent yours in a place youve never been and a time you can hardly comprehend. 
 						   In these days of consequence though it feels more relavent.)
-					     (tucked in the corner and kept under your nicer clothes is a bible.); it feels strage to leave something so fragile
+					     (tucked in the corner supporting the other books that lay against it is your parents bible.); it feels strage to leave something so fragile
 					; out in the open. It is not a living thing but a bundle of paper needing one to stave off the rot.) 
 						  t t ((read-text txt))))
 				    (bathroom
@@ -401,10 +408,14 @@
 (defparameter *container-locations* '((home 
 				       (bedroom
 					(dresser (a dresser stands in the corner containing various possessions of yours.)
-						 (journal bible pistol) nil nil nil nil)
-					(cabinet (a cabinet is mounted to the wall. its contents dictated to you by the occupiers.) ;just one cabinet? not very realistic, but is that how I operate
+						 (journal pistol) nil nil nil nil)
+					(cabinet (a cabinet is mounted to the wall. its contents dictated to you by the occupiers.) 
+					;just one cabinet? not very realistic, but is that how I operate
 					;in my kitchen?how does the mind process it? Don't want tedious description
-						 (wine baguette butter) nil nil nil nil))
+						 (wine baguette butter) nil nil nil nil)
+					(bookshelf (a sparse bookself stands not too high.)
+						   (bible) nil nil nil nil))
+				       
 				       (bathroom 
 					(cabinet (behind the mirror is a nook for your toiletries. strange to be at war and still have these luxuries.) ;easements?
 						 (cologne shaving-cream razor-blade razor) nil nil nil nil)))
@@ -512,7 +523,8 @@
 (defparameter *persons* `(,(make-person
                                :name 'barista ;proprieter. Create synonyms for each person. Or just for occupations? 
                                :appearance '(a middle-aged man with a sullen look on his face.)
-                               :location-description '(a middle-aged man stands behind the bar.) ;this can come before or after appearance, so write two functions with a way to determ           
+                               :location-description '(a middle-aged man stands behind the bar.) 
+;this can come before or after appearance, so write two functions with a way to determ           
                                :location '(main-area cafe))
                              ,(make-person
                                :name '(Jean Augustin)
@@ -522,7 +534,8 @@
                                :location '(basement cafe))))
 
 
-(defparameter *days-since-occupation* (+ 150 (random 400))) ;I don't actually know how many days it should be. maybe the game should have chapters that are years or seasons
+(defparameter *days-since-occupation* (+ 150 (random 400))) 
+;I don't actually know how many days it should be. maybe the game should have chapters that are years or seasons
 ;this could help divide the world up, so you're in the country at one part, then maybe you're in paris, and then later the unoccupied zone, etcetera. 
 
 
@@ -532,9 +545,9 @@
 (defstruct event 
   )
 
-;==============================================================================================================================================================
+;===========================================================================================================================================
 ;TIME and SIMULATION
-;==============================================================================================================================================================
+;==========================================================================================================================================
 
 ;this should really be a structure GACK. 
 (defstruct  game-time 
@@ -713,6 +726,7 @@
 
 (defun change-area1 (area)
   (setf (first (person-location *player*)) area)
+;  (silence) 
   (if (on-street)
       (on-street)))
 ;    (display-room)) )
@@ -799,6 +813,7 @@
 
 (defun get-features ()
   (cdr (assoc (current-area) (cdr (assoc (current-location) *area-features*)))))
+
 
 (defun list-features ()
   (let ((lst nil))
@@ -949,18 +964,33 @@
 		    
 
 (defun describe-noise ()
-  *noise*)
+  (when (equal (current-area) (car *noise*))
+    (play-radio)
+    (second *noise*))) ;this is so it'll randomly play different tunes. it probably changes too often, and isn't written in a simulation style. 
 
 ;RADIO. 
 ;it will need to continue playing after the first 
 (defun play-radio ()
   (let ((audio 
 	 (random-elt (cdr (assoc 'radio-londres *stations*)))))
-    (setf *noise* audio)))
+    (setf *noise* audio)
+    (setf *noise* (list (current-area) *noise*))))
 
 
-(defun silence ()
+(defun silence-radio ()
   (setf *noise* nil))
+
+;this will rely on a feature function that tells you where a feature is. if its on first, go to second, etcetera. what if its multiple? 
+(defun activate-lift (feat first second) ;add an &optional floors lst to switch to the appropiate floor. 
+  (let* ((location-lst (get-feature-loc+area feat))
+	(area (car location-lst))
+	(loc (second location-lst)))
+    (cond ((equal first area)
+	   (move-feature-area feat second)
+	   (change-area1 second))
+	  (t 
+	   (move-feature-area feat first)
+	   (change-area1 first)))))
 
 ;==================================================================================================================================
 ;OBJECTS
@@ -1172,8 +1202,8 @@
 ;change, and then show that information. 
 (defun list-area ()
   (let ((lst nil))
-    (awhen-cond ((describe-contents) (push it lst))
-		((describe-noise) (push it lst)) ;this makes sense, you'd hear something as you approach before you see it. 
+    (awhen-cond ((describe-noise) (push it lst)) ;this makes sense, you'd hear something as you approach before you see it. 
+		((describe-contents) (push it lst))
 		((describe-area) (push it lst))
 		((on-street) 
 		 (dolist (i (describe-street)) (push i lst))
@@ -1452,7 +1482,7 @@
 ;load function, will read from a document. 
 
 
-
+;=================================================================================================================
 ;CREATION FUNCTIONS this is how a user can use the engine.   
 ;=================================================================================================================
 (defun create-location ()
@@ -1494,11 +1524,21 @@
 (defun rewrite-area (location area)
   (setf (second (cdr (assoc area (cdr (assoc location *map*))))) (read-list)))
 
+
+;--------------------------------------------------
+;--------------------------------------------------
+;--------------------------------------------------
+;ADDING/REMOVING Objects and Containers.
+;--------------------------------------------------
+;--------------------------------------------------
+;--------------------------------------------------
+
+
 ;OBJECTS/ITEMS. these will allow objects to be removed from a container or area, and inserted into inventory. I need a way to hide
 ;items and locations from the player without deleting them from the map. maybe they have a t or nil value at end. this is a general function.
 ; I can write a more specific one for use in gameplay where an object will only be removed while the player is in its area. 
 (defun remove-object (obj loc area)
-  (if (member obj (car (get-objects)))
+  (if (member obj (car (get-objects))) ;but this means it'll only work if player is in area right? 
       (setf (cdr (assoc area (cdr (assoc loc *object-locations*))))
             (cdr (second (assoc area (cdr (assoc loc *object-locations*))))))
 ;    (setf (second (assoc area (cdr (assoc loc *object-locations*))))
@@ -1542,3 +1582,62 @@
 				       (cdr (assoc (current-location) *container-locations*)))))
        (cdr (assoc (current-area) 
 		      (cdr (assoc (current-location) *container-locations*))))))) 
+
+;--------------------------------------------------
+;--------------------------------------------------
+;--------------------------------------------------
+;FEATURE MANAGMENT
+;--------------------------------------------------
+;--------------------------------------------------
+;--------------------------------------------------
+
+;add feature to the front. 
+(defun add-feature (feature area loc)
+  (push feature (cdr (assoc area (cdr (assoc loc *area-features*))))))
+	
+
+;delete feature
+(defun delete-feature (feature)
+  (let* ((lst (get-feature-loc+area feature))
+	 (area (car lst))
+	 (loc (second lst)))
+    (setf (cdr (assoc area (cdr (assoc loc *area-features*))))
+	  (remove (get-feature feature) (cdr (assoc area (cdr (assoc loc *area-features*)))))))) 
+
+;move feature area
+(defun move-feature-area (feature dest)
+  (let* ((feat (get-feature feature))
+	 (location-lst (get-feature-loc+area feature))
+	 (area (car location-lst))
+	 (loc (second location-lst)))
+    (delete-feature feature)
+    (add-feature feat dest loc)))
+
+;move feature location
+(defun move-feature-area+loc (feature dest-area dest-loc)
+  (let* ((feat (get-feature feature))
+	 (location-lst (get-feature-loc+area feature))
+	 (area (car location-lst))
+	 (loc (second location-lst)))
+    (delete-feature feature)
+    (add-feature feat dest-area dest-loc)))
+    
+;horribly inefficient. would be cheaper to include a location list on all features. but then why organize them by feature? for easy viewing? 
+(defun get-feature-loc+area (feature)
+  (let ((location nil))
+    (block nested-loop 
+      (dolist (loc *area-features*)
+	(dolist (area (cdr loc))
+	  (dolist (feat (cdr area))
+	    (when (equal (car feat) feature)
+	      (setf location (list (car area) (car loc)))
+	      (return-from nested-loop location))))))))
+
+(defun get-feature (feature)
+  (let ((location nil))
+    (block nested-loop 
+      (dolist (loc *area-features*)
+	(dolist (area (cdr loc))
+	  (dolist (feat (cdr area))
+	    (when (equal (car feat) feature)
+	      (return-from nested-loop feat)))))))) 
