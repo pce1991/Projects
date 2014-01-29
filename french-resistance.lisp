@@ -59,6 +59,16 @@
                (awhen-cond ,@(cdr clauses)))
            (awhen-cond ,@(cdr clauses)))))))
 
+(defmacro acond (&rest clauses)
+  (if (null clauses)
+      nil
+    (let ((cl1 (car clauses))
+          (sym (gensym)))
+      `(let ((,sym ,(car cl1)))
+         (if ,sym
+             (let ((it ,sym)) ,@(cdr cl1))
+           (acond ,@(cdr clauses)))))))
+
 (defmacro while (test &body body)
   `(do ()
        ((not ,test))
@@ -250,14 +260,16 @@
 ;might trigger a description. do I include all the the synonyms in here along with set-state and change-state? I could ` ,@ it in.
 ;multiple functions can be triggered by a state change, so put them in a list at car instead of just set-state. example. need to
 ;change the functions so that they do not just the first, but everything in the first. 
-;elevator will change player's location when its activated. 
+;elevator will change player's location when its activated. 1-25. added a new value after functions indicating whether or not the feature
+;is operatorable or not. add it before functions actually, so change  get-feature-functions. 
+;how do I get some of these actions to not need an object. "sleep" should be interpreted as sleep on the bed.
 (defparameter *area-features* '((home
 				 (bedroom 
 				  (bed (there rests your bed in the corner.)
 				       (its not a particularly comfortable bed but its a great relief to sleep in
 					    even a little comfort. certainly better than the cots or mats most soldiers sleep on.)
 				       nil (nil (you lay down onto your easement.) ()) 
-				       ((((save-game)) sleep))) ;how will the state-description work with save-game? 
+				       t ((((save-game)) sleep rest))) ;how will the state-description work with save-game? 
 				  (radio (your radio sits ontop of the small bookshelf.)
 					 ;used to say silently, but had to change 
 					 ;because that doesn't make sense when its
@@ -268,50 +280,62 @@
 					 nil (nil (the switch snaps and the speakers crack and then the projection fills the room.)
 						  (as quickly as it spread out it drops off and your ears refocus on the noise of the 
 						      outside world.))
-					 ((((set-state 'radio t) (play-radio)) turn-on) 
-					  (((set-state 'radio nil) (silence)) turn-off)))) 
+					 t ((((set-state 'radio t) (play-radio)) turn-on) 
+					    (((set-state 'radio nil) (silence)) turn-off)))) 
 				        ;include a function thats searches for a random broadcast, and then plays it. 
 				 (bathroom 
 				  (faucet ()
 					  (a sink. the most conveinent delivery of the most important need. such a fragile infastructure
 					     that the nazis likely control whether it flows or not.)
 					  nil (nil (water flows from the faucet.) (you stop the flow of water.)) 
-					  ((((set-state 'faucet t)) turn-on) (((set-state 'faucet nil)) turn-off)))
+					  t ((((set-state 'faucet t)) turn-on) (((set-state 'faucet nil)) turn-off)))
 				  (bathtub (filling up most of the room is the bathtub.)
 					   (the porcelin is not too clean but it seems pointless to clean it. you doubt that youll
 						be around to enjoy the soak that many mores times.)
-					   nil (nil (the water flows from the spout and rushes against the stop until it juse falls
+					   nil (nil (the water flows from the spout and rushes against the stop until it just falls
 							 into itself and soon the tub is filled.) (the cascade halts.))
-					   ((((set-state 'bathtub t)) turn-on) (((set-state 'bathtub nil)) turn-off)))))
+					   t ((((set-state 'bathtub t)) turn-on) (((set-state 'bathtub nil)) turn-off)))))
 				
 				(eiffel-tower 
                                  (bottom 
 				  (lift (the empty lift rests ready to move along the tower.) 
 					(the lift turns what is a rather long way to climb into a slow and pleasant ascent over the
-					     whole of Paris.)
+					     whole of Paris.) 
 					nil (nil (the lift begins its climb to the top of the tower.) 
 						 (the lift sinks down as your stomach rises.)) ;the state reflects moving up or down? 
-					((((change-state 'lift) 
-					   (activate-lift 'lift 'bottom 'top)) activate))) 
+					t ((((change-state 'lift) 
+					     (activate-lift 'lift 'bottom 'top)) activate))) 
 					;so I need a function that can move features between locations/areas. 
 				  ;also need an elevator function that'll use change-area1. 
 				  (lift-cable (there is the cable suspending the lift.)
 						  (with the right kind of tool you could probably cut the cable.)
 						  t (t () (the cable is cut rendering the lift useless.
-							       its a long climb to the top now. too long for Hitler.) 
-						       ((((change-state)) cut)))))
+							       its a long climb to the top now. too long for Hitler.)) 
+						       t ((((change-state 'lift-cable) (disable-feature 'lift)) cut))))
 				 
-                                 (top (flagpole nil (t (that hated shape of the nazis rides on a sharp red wave in the wind
-							 over all Paris.) (the flagpole is bare.)) 
-						((((set-state 'flagpole nil)) lower-flag)
-						 (((set-state 'flagpole t)) raise-flag))))) )) 
+                                 (top 
+				  (flagpole (that hated shape of the nazis rides on a sharp red wave in the wind
+						 over all Paris.) ;this will only describe it when you're at the top though... 
+					    (the symbol that flies from it embodies permanence yet it is pulled down so easily.)
+					    nil (t (you pull down to hoist the flag up.) 
+						   (you make the flag rappel down the pole leaving it bare.)) ;rappel?
+						t ((((set-state 'flagpole nil) (lower-flag 'flagpole)) lower-flag lower)
+						   (((set-state 'flagpole t) (raise-flag 'flagpole '?x)) 
+						    raise-flag raise))))) )) 
+;how do I deal with 3 arguments, raise the french flag on the flagpole. 
+			      
 					;these could just be on/off functions, so just abstract it. 
 				 ;this can't use the generic though, because it'll have a t value, but with one flag, a nil when
 				 ;you lower it, and then a second when the french flag is raised. write a function that can 
 				 ;overwrite description, and in the case of a flag, it might have this function which contains
 				 ;its own description to be added. so maybe the command raise-flag does more that just set-state. 
 				
-
+;I want to add the ability to bury something in an area. this would be a feature I think since it'd have a state "buried" and a function
+;"digup" that retrieves it. problem is, what if the thing buried is a container, or an object, it won't be a feature itself. so how do I put
+;those things inside a feature? it might be similar to flagpole, which has a flag on it. Also, how would I describe or indicate to the player
+;that they can or should dig. put it in the park. maybe the function dig reveals an item, so features can work like containers too, 
+;only instead of having a list, it would have a a function (digup x) and then when you call digup, it searches through containers and objects
+;for one matching x, and then retrieves it. 
 
 
 ;I could maybe make paths like for 314. (home (cafe 2) (eiffel-tower 10)). This would get rid of the need for the player to draw
@@ -330,6 +354,7 @@
 ;so that I can add and delete objects from a room, so they must be in a list. and things like if its a known object. 
 ;change all these ts and nils to (fixed nil) (hidden t) etcetera. Instead of a hidden value maybe I should say what container its in? 
 ;this might make it easier to keep track of when writing things as a 3rd party. 
+;for hidden objects, the description clearly refereneces the container, but it is not clear from the code what the container is. 
 (defparameter *object-locations* '((home 
 				    (bedroom                     ;why do I have all these in a list? it would be cleaner to just call cdr (bedroom.... and get ((x) (y)) etc.
 				     (girl-photo (you wonder what happened to her.
@@ -383,7 +408,13 @@
 				      (cologne (another item you find no need for. you wish you could care about how women thought you smelled.
 							but the women you will meet in the resistance probably dont care a bit about that kind of thing anymore.)
 					       (in the corner is a bottle of cologne half empty.)
-					       t t ((apply)))))))
+					       t t ((apply)))))
+				   (cafe
+				    (basement
+				     ;include some history about it. 
+				     (french-flag (the chromatic trinity. two contrasted color and the blank gape between them.) ;breach instead of gape? 
+						  (its furled up in barrel.) ;change this depending on its locations. 
+						  t t ((apply))))))) 
 				      
 					     
 						   
@@ -463,7 +494,7 @@
                         :location '(bedroom home))) 
 
 (defparameter *commands* '(save time enter exit explore inspect walk back pickup use talk open close consider equip take inventory drop put
-			   change-state)) ;consider? this might give you clues when reading memos or something. put in, put on.  
+			   )) ;consider? this might give you clues when reading memos or something. put in, put on.  
 
 ;write a synonym for change-state, or maybe some commands in this list just translate to change-state? or they do if the object is a feature? 
 
@@ -523,12 +554,14 @@
 (defparameter *persons* `(,(make-person
                                :name 'barista ;proprieter. Create synonyms for each person. Or just for occupations? 
                                :appearance '(a middle-aged man with a sullen look on his face.)
-                               :location-description '(a middle-aged man stands behind the bar.) 
+                               :location-description '(the proprieter stands behind the counter.)
+			       ;include an action that can be melded with location-description and can change on situation. 
 ;this can come before or after appearance, so write two functions with a way to determ           
                                :location '(main-area cafe))
                              ,(make-person
                                :name '(Jean Augustin)
-                               :appearance '(a man not that much older than you. he appears weathered and this experience seems the source of his confidence.
+                               :appearance 
+			       '(a man not that much older than you. he appears weathered and this experience seems the source of his confidence.
                                                he seems to know what is required. and sure in what he is capable of.)
                                :location-description '(he sits at a table looking over documents.)
                                :location '(basement cafe))))
@@ -542,6 +575,8 @@
 ;new events will be created each time you change location. events will have factors like number of people, what they're doing, 
 ;and will also have stats like how long you have to do something. how to get events to be influenced by others? events will have
 ;to be saved as well, and triggered in the right order when loading a game. 
+;TRIGGER THESE when the player is walking between points. this way you can actually make the road seem like a place. you leave your home and 
+;encounter a german patrol before you reach the cafe. something like that. This means player needs a limbo location "street" in addition to the area.
 (defstruct event 
   )
 
@@ -563,7 +598,8 @@
 
 (defparameter *game-time* (make-game-time))
 
-;(defparameter *days-in-resistance* (fourth *game-time-of-day*)) ;intialize this once the game begins, or perhaps once the player successfully joins/completes a mission. 
+;(defparameter *days-in-resistance* (fourth *game-time-of-day*)) 
+;intialize this once the game begins, or perhaps once the player successfully joins/completes a mission. 
 
 (defun hour ()
   (game-time-hour *game-time*))
@@ -824,6 +860,17 @@
 (defun describe-feature (feature)
   (car (cdr (assoc feature (get-features))))) 
 
+(defun feature-description (feature)
+  (second (cdr (assoc feature (get-features)))))
+
+
+;no longer need inspect-object. this is a more general function. what else can you inspect? 
+(defun print-inspection (item)
+  (acond ((feature-description item)
+	  (print-description it) (fresh-line))
+	 ((object-description item)
+	  (print-description it) (fresh-line))))
+
 ;some features will be nil, things that don't really deserve a whole mention except in the general area description perhaps? 
 ;but that isn't really kosher. maybe do this rarely, like with the faucet. its a nice feature to allow at least, even if its ugly. 
 (defun describe-features ()
@@ -868,9 +915,22 @@
   (if (describe-state feature)
        (print-description (describe-state feature))))
 
+(defun feature-functions-p (feature)
+  (nth 4 (cdr (assoc feature (get-features))))) 
+
+;should I include some message here saying that the feature is disabled? 
+;a limit of this is that a feature can only be disabled if if its in the room. 
+(defun disable-feature (feature)
+  (setf (nth 4 (cdr (assoc feature (cdr (assoc (current-area) (cdr (assoc (current-location) *area-features*)))))))
+	nil))
+
+(defun disable-feature-at (feature area loc)
+  (setf (nth 4 (cdr (assoc feature (cdr (assoc area (cdr (assoc loc *area-features*)))))))
+	nil))
+
 ;this will only work if player is in the room with the feature. REWRITE
 (defun get-feature-functions/commands (feature)
-  (nth 4 (cdr (assoc feature (get-features))))) 
+  (nth 5 (cdr (assoc feature (get-features))))) 
 
 (defun list-all-functions ()
   (let ((lst nil))
@@ -903,11 +963,13 @@
       (push (get-feature-commands feat) lst))
     (apply #'append lst)))
 
+
 (defun add-feature-commands ()
   (dolist (feat (list-features))
-    (if (not (hidden-feature-p feat))
+ ;   (if (not (hidden-feature-p feat)) ;maybe change this. 1-25-14. the player won't know its hidden, so can't do something  they're not supposed to.
+	;but they also won't have to search if its unintuitive as in the case of elevator cables where cutting them entails searching for them. 
 	(dolist (cmd (get-feature-commands feat))
-	  (push cmd *commands*)))))
+	  (push cmd *commands*))))
 
 (defun remove-feature-commands ()
   (dolist (i *commands*)
@@ -937,15 +999,41 @@
        nil)) 
 
 ;and do the commands. 
-(defun match-command-feature-function (cmd feat)
-  (dolist (fun (get-feature-functions/commands feat))
-    (if (member cmd fun)
-	(dolist (f (car fun))
-	  (eval f))))) 
+(defun match-command-feature-function (cmd feat &optional obj)
+  (if (feature-functions-p feat)
+      (dolist (fun (get-feature-functions/commands feat))
+	(if (member cmd fun)
+	    (dolist (f (car fun))
+	      (eval f))))
+      (print-description `(the ,feat doesnt seem to be working.))))
+
+;this is so you don't have to put quotes inside the definition of feature-functions. when it tries to evaluate them, it'll add a quote to each argument. 
+(defun ready-func-eval (func)
+  (let ((function nil))
+    (dolist (i (cdr func))
+      (push `(quote ,i) function))
+    (setf function (reverse function))
+    (push (car func) function)
+    function))
+    
+	     
+;this will be a list from features or objects. its complete if it doesn't contain any object variables. it either has at least one, beginning with ?x, or none. 
+(defun complete-function-p (func)
+  (if (not (member (quote '?x) func))
+      t
+      nil))
+
+;so for raise-flag, I need to (eval it) like everything else, but the flag argument isn't going to be static, so before a func
+;is evaluated, it should be converted if such a conversion is necessary. 
+;start using pattern matching more often? 
+(defun get-function-args (function)
+  
+)
 
 ;--------------------------------------------------
 ;FEATURE FUNCTIONS
 ;--------------------------------------------------
+
 
 ;this has the deficit of only being allowed to have one noise, not simeltaneous noises.
 (defparameter *noise* nil)
@@ -990,7 +1078,16 @@
 	   (change-area1 second))
 	  (t 
 	   (move-feature-area feat first)
-	   (change-area1 first)))))
+	   (change-area1 first))))) 
+
+;shouldn't this "dispense" the flag that is waving. I have no way of reprsenting that right now... 
+(defun lower-flag (flagpole) 
+  (edit-feature-description flagpole nil))
+
+
+;is flag a name or the object itself? 
+(defun raise-flag (flagpole flag)
+  (edit-feature-description flagpole (object-description flag)))
 
 ;==================================================================================================================================
 ;OBJECTS
@@ -1097,9 +1194,13 @@
       (push (car i) lst))
     (reverse lst)))
 
+(defun object-description (obj)
+  (second (assoc obj (get-objects))))
+
 (defun inspect-object (obj)
-  (print-description (second (assoc obj (get-objects))))
+  (print-description (object-description obj))
   (fresh-line))
+
 
 (defun unhide-object (obj)
   (setf (nth 5 (cdr (assoc obj (get-objects)))) nil))
@@ -1301,7 +1402,11 @@
 ;this isn't working too hot right now, its calling on the wrong part of description. 
 (defun show-persons ()
   (dolist (i (list-persons))
-    (return (person-appearance i)))) ;watch this: it might not work for printing multiple persons. 
+    (return (person-location-description i)))) ;watch this: it might not work for printing multiple persons. 
+
+;new function to describe a person's appearance or expression when you begin interacting with them. 
+
+;function to change the name in location-description once the person is known. A man sits at a table becomes Jean sits at a table.
 
 (defun list-persons ()
   (let ((lst nil))
@@ -1361,7 +1466,6 @@
           (do-command cmd obj)))
       (play)))) 
   
-  
 
 ;stupid parser. probably as stupid as can be. this should return the command and the object if there is one. I'll have a do-command function
 ;should this be expanded to feature commands with and, like pick up the bottle and smash him on the head? or shoot that guy and that guy? 
@@ -1402,7 +1506,7 @@
         (loop named synonyms for i in *command-synonyms* do
               (loop for j in parsed-phrase do
                     (if (member j (car (cdr i)))
-                        (return-from commands (car i)))))))
+                        (return-from commands (car i))))))) 
  
 (defun find-area (parsed-phrase)
   (find-in-phrase parsed-phrase (list-areas)))
@@ -1435,11 +1539,14 @@
         ((and (not (on-street)) (null cmd) (member obj (list-areas))) (change-area1 obj))
         ((and (on-street) (equal cmd 'walk) (member obj (list-locations))) (change-location1 obj))
         ;this handles saying go inside, or walk inside which is essentially a synonym of enter, find another way to treat it as such? 
-        ((and (on-street) (equal cmd 'walk) (equal obj (entrance))) (change-area1 obj)) ;need to check to see if obj is in, inside, in-side, or something else? 
+        ((and (on-street) (equal cmd 'walk) (equal obj (entrance))) (change-area1 obj)) 
+					;need to check to see if obj is in, inside, in-side, or something else? 
         ((and (on-street) (null cmd)) (change-location1 obj));this is bad cause there's no way to check
-        ((and (on-street) (equal cmd 'enter) (null obj)) (change-area1 (entrance))) ;enter is a distinct command from walk, but i'm not sure it should be
+        ((and (on-street) (equal cmd 'enter) (null obj)) (change-area1 (entrance))) 
+					;enter is a distinct command from walk, but i'm not sure it should be
         ((and (on-street) (equal cmd 'enter) (equal obj (current-location))) (change-area1 (entrance))) 
-        ((and (on-street) (equal cmd 'enter) (equal obj (entrance))) (change-area1 obj)) ;this one is error prone, must have a check to make sure that obj is a list of areas.
+        ((and (on-street) (equal cmd 'enter) (equal obj (entrance))) (change-area1 obj)) 
+					;this one is error prone, must have a check to make sure that obj is a list of areas.
         ;need to create a clear idea of where a building can be entered so player isn't temped to try other entrances. Don't make it too static though. 
         ;I also need to be able to say something like Enter through the front, or go inside. 
         ((equal cmd 'time) (show-time))
@@ -1447,13 +1554,13 @@
         ((equal cmd 'equip) (equip obj)) 
         ((equal cmd 'open) (open-> obj))
         ((equal cmd 'inventory) (show-inventory))
-
 	((command-match-feature cmd obj) (match-command-feature-function cmd obj))
-
-        ((equal cmd 'inspect) (inspect-object obj)))) ;I'm not sure that I want on-street to handle the descriptive part.  
-
+        ((equal cmd 'inspect) (print-inspection obj))
+						;		 (inspect-object obj))
+	
+)) ;I'm not sure that I want on-street to handle the descriptive part.  
 ;With features, I add all the recognized commands to the list, but those commands need to be converted to the appropriate 
-;set/change-state command. so turn-on might be passed to parser, but should be converted to (set-state t)?
+;set/change-state command. so turn-on might be passed to parser, but should be converted to (set-state t)? 
 
 
 ;this will prompt the player for a line, turn it into a list of chars, go through the whole list and as long as a space is not encountered
@@ -1471,15 +1578,6 @@
           (setf word nil)))) 
     (push (coerce (reverse word) 'string) lst)
     (mapcar #'read-from-string (reverse lst)))) 
-
-        
-
-;write a save/sleep function. This will have to write to a document. will need to save the instance of player
-;strutcture. So should I write other variables, or just add to that strucure. I'll need to include missions that have been
-;completed, persons that have died, and also changes to the environment (such as cutting cable of eiffel tower). 
-
-
-;load function, will read from a document. 
 
 
 ;=================================================================================================================
@@ -1552,25 +1650,8 @@
       (let ((container (car i)))
 	(setf (cdr (cdr (assoc container (get-containers))))
 	      (remove obj (cdr (cdr (assoc container (get-containers))))))))))
-	
-;GACKGACKGACK 
-(defun remove-obj (obj)
-  (remove-from-container obj) 
-  (if (member obj (car (get-objects)))
-      (setf (cdr (assoc (current-area) (cdr (assoc (current-location) *object-locations*))))
-            (cdr (cdr (assoc (current-area) (cdr (assoc (current-location) *object-locations*))))))
-    (delete (assoc obj (cdr (assoc (current-area) (cdr (assoc (current-location) *object-locations*)))))
-            (cdr (assoc (current-area) (cdr (assoc (current-location) *object-locations*)))))))
-            
 
-;WRITE ADD OBJECT FUNCTIONS. one for designing the game, another for adding an object that's already written into the gamespace. 
-;this will be done for things like serving the player a cup of coffee, or handing him a letter. 
-
-
-;write some general functions that'll give me a particular part of a list such as *map*. THis'll help clean up the code
-;and make this more of an engine than a particular game, because it has to be easy to read if its gonna be reused. 
-
-;this is for blowing up a safe or something. Gameplay version. Write a separate creating version.
+;THIS is for blowing up a safe or something. Gameplay version. Write a separate creating version.
 (defun remove-container (container) 
   (if (member container (car (get-containers)))
       (setf (cdr (assoc (current-area) 
@@ -1582,6 +1663,52 @@
 				       (cdr (assoc (current-location) *container-locations*)))))
        (cdr (assoc (current-area) 
 		      (cdr (assoc (current-location) *container-locations*))))))) 
+	
+;GACKGACKGACK 
+(defun remove-obj (obj)
+  (remove-from-container obj) 
+  (if (member obj (car (get-objects)))
+      (setf (cdr (assoc (current-area) (cdr (assoc (current-location) *object-locations*))))
+            (cdr (cdr (assoc (current-area) (cdr (assoc (current-location) *object-locations*))))))
+    (delete (assoc obj (cdr (assoc (current-area) (cdr (assoc (current-location) *object-locations*)))))
+            (cdr (assoc (current-area) (cdr (assoc (current-location) *object-locations*)))))))
+            
+;------------------------------------------------------------
+;------------------------------------------------------------
+;OBJECTS
+;------------------------------------------------------------
+;------------------------------------------------------------
+
+(defun get-object-loc+area (object)
+  (block nested-loop 
+    (dolist (loc *object-locations*)
+      (dolist (area (cdr loc))
+	(dolist (obj (cdr area))
+	  (if (equal (car obj) object)
+	      (return-from nested-loop (list (car area) (car loc)))))))))
+
+;maybe write a way for element to not be a number, but convert something like 'description to 0. would be better for UI. 
+(defun edit-object-element (object element replacement)
+  (let* ((lst (get-object-loc+area feature))
+	 (area (car lst))
+	 (loc (second lst)))
+    (setf (nth element (assoc area (cdr (assoc loc *object-locations*))))
+	  change)))
+
+(defun edit-object-description (object description)
+  (edit-object-element object 1 description))
+
+(defun edit-object-location-description (object description)
+    (edit-object-element object 2 description))
+
+
+;WRITE ADD OBJECT FUNCTIONS. one for designing the game, another for adding an object that's already written into the gamespace. 
+;this will be done for things like serving the player a cup of coffee, or handing him a letter. 
+
+
+;write some general functions that'll give me a particular part of a list such as *map*. THis'll help clean up the code
+;and make this more of an engine than a particular game, because it has to be easy to read if its gonna be reused. 
+
 
 ;--------------------------------------------------
 ;--------------------------------------------------
@@ -1590,6 +1717,13 @@
 ;--------------------------------------------------
 ;--------------------------------------------------
 ;--------------------------------------------------
+
+(defun edit-feature (feature element change)
+  (let* ((lst (get-feature-loc+area feature))
+	 (area (car lst))
+	 (loc (second lst)))
+    (setf (nth element (assoc area (cdr (assoc loc *area-features*))))
+	  change)))
 
 ;add feature to the front. 
 (defun add-feature (feature area loc)
@@ -1621,7 +1755,7 @@
 	 (loc (second location-lst)))
     (delete-feature feature)
     (add-feature feat dest-area dest-loc)))
-    
+
 ;horribly inefficient. would be cheaper to include a location list on all features. but then why organize them by feature? for easy viewing? 
 (defun get-feature-loc+area (feature)
   (let ((location nil))
@@ -1641,3 +1775,8 @@
 	  (dolist (feat (cdr area))
 	    (when (equal (car feat) feature)
 	      (return-from nested-loop feat)))))))) 
+
+
+;this will overwrite the description of what's on the flagpole, or any other feature. 
+(defun overwrite-feature-description (feature rewrite)
+  (edit-feature feature 1 rewrite)) 
