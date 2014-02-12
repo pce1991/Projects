@@ -3,14 +3,13 @@
 ;so this is kind of gross, but I can't really use punctuation except periods. I guess I'll have to write it like Hemingway. 
 
 ;import stuff from onlisp? so far I'm only using explode, but I'm sure these might be helpful. do-tuples/o might be useful. 
-;(load "~/Projects/utilities/onlisp.lisp")
-;(load "~/Projects/utilities/patmatch-Novak.lisp") ;this will be used in conversation system. 
+(load "~/Projects/onlisp.lisp")
+(load "~/Projects/utilities/patmatch-Novak.lisp") ;this will be used in conversation system. 
   
 
 ;UTILITY FUNCTIONS
 ;========================================================================================
 
-;Clean up text. Why does this give me (t t) everytime? 
 (defun tweak-text (lst caps lit)
   (when lst
     (let ((item (car lst))
@@ -110,7 +109,7 @@
 (defparameter *map* '((home
                        (your small apartment in conquered Paris. No longer as comforting as home should be. more like a trap than a dwelling. 
                              they will know right where to find you.)
-                       (bedroom (the sun strikes through the window of your room.)) ;and on your dresser a picture of your parents and a girl you once knew.
+                       (bedroom (the sun is striking through the window of your room.)) ;and on your dresser a picture of your parents and a girl you once knew.
                        (bathroom (you stand in front of your sink staring into the mirror.)))
                       (apartment
                        (this is your apartment building.) 
@@ -185,7 +184,15 @@
                                 to sit near the boisterous intruders.)
                         (home north 2) (movie-theatre west 2) (eifel-tower west 8))
                        (movie-theatre () (apartment north-east 3) (cafe east 2) (eiffel-twoer west 6))
-                       (eiffel-tower () (apartment east 10) (cafe east 8) (movie-theatre east 6))
+                       (eiffel-tower (the sidewalk runs along the top of the green field which stretches out 
+					  between two rows of trees hedged into blocks. the planted tower reaches up at the end of this yard.
+					  a couple lounges on a picnic blanket at sea in the waving grass.) 
+			;this is perhaps an odd way to come at the tower, but it justifies there being an "entrance." 
+			;this system is severely limiting, because what if I wanted to add objects or features on the street... 
+			;I guess I could actually by placing them at (eiffel-tower (street... (home (street... Still, I'm not sure I like this system. 
+			(apartment east 10) (cafe east 8) (movie-theatre east 6))
+		       ;maybe add an eiffel-tower2 here... perhaps some roads will lead you to an entrance, others will lead you directly to it. 
+		       ;how to parse that though... there's probably a better way to represent multiple roads.
                        (movie-theatre ())
                        (nightclub ())
                        (chruch ())
@@ -280,21 +287,21 @@
 					 nil (nil (the switch snaps and the speakers crack and then the projection fills the room.)
 						  (as quickly as it spread out it drops off and your ears refocus on the noise of the 
 						      outside world.))
-					 t ((((set-state 'radio t) (play-radio)) turn-on) 
-					    (((set-state 'radio nil) (silence)) turn-off)))) 
+					 t ((((set-state radio t) (play-radio)) turn-on) 
+					    (((set-state radio nil) (silence)) turn-off)))) 
 				        ;include a function thats searches for a random broadcast, and then plays it. 
 				 (bathroom 
 				  (faucet ()
 					  (a sink. the most conveinent delivery of the most important need. such a fragile infastructure
 					     that the nazis likely control whether it flows or not.)
 					  nil (nil (water flows from the faucet.) (you stop the flow of water.)) 
-					  t ((((set-state 'faucet t)) turn-on) (((set-state 'faucet nil)) turn-off)))
+					  t ((((set-state faucet t)) turn-on) (((set-state faucet nil)) turn-off)))
 				  (bathtub (filling up most of the room is the bathtub.)
 					   (the porcelin is not too clean but it seems pointless to clean it. you doubt that youll
 						be around to enjoy the soak that many mores times.)
 					   nil (nil (the water flows from the spout and rushes against the stop until it just falls
 							 into itself and soon the tub is filled.) (the cascade halts.))
-					   t ((((set-state 'bathtub t)) turn-on) (((set-state 'bathtub nil)) turn-off)))))
+					   t ((((set-state bathtub t)) turn-on) (((set-state bathtub nil)) turn-off)))))
 				
 				(eiffel-tower 
                                  (bottom 
@@ -302,25 +309,25 @@
 					(the lift turns what is a rather long way to climb into a slow and pleasant ascent over the
 					     whole of Paris.) 
 					nil (nil (the lift begins its climb to the top of the tower.) 
-						 (the lift sinks down as your stomach rises.)) ;the state reflects moving up or down? 
-					t ((((change-state 'lift) 
-					     (activate-lift 'lift 'bottom 'top)) activate))) 
+						 (the lift sinks as your stomach rises.)) ;the state reflects moving up or down? 
+					t ((((change-state lift) 
+					     (activate-lift lift bottom top)) activate))) 
 					;so I need a function that can move features between locations/areas. 
 				  ;also need an elevator function that'll use change-area1. 
 				  (lift-cable (there is the cable suspending the lift.)
 						  (with the right kind of tool you could probably cut the cable.)
 						  t (t () (the cable is cut rendering the lift useless.
 							       its a long climb to the top now. too long for Hitler.)) 
-						       t ((((change-state 'lift-cable) (disable-feature 'lift)) cut))))
+						       t ((((change-state lift-cable) (disable-feature lift)) cut)))) ;what do I do about this which requires an item. 
 				 
                                  (top 
 				  (flagpole (that hated shape of the nazis rides on a sharp red wave in the wind
 						 over all Paris.) ;this will only describe it when you're at the top though... 
 					    (the symbol that flies from it embodies permanence yet it is pulled down so easily.)
-					    nil (t (you pull down to hoist the flag up.) 
+					    nil (t (you pull down on the rope to hoist the flag up.) 
 						   (you make the flag rappel down the pole leaving it bare.)) ;rappel?
-						t ((((set-state 'flagpole nil) (lower-flag 'flagpole)) lower-flag lower)
-						   (((set-state 'flagpole t) (raise-flag 'flagpole '?x)) 
+						t ((((set-state flagpole nil) (lower-flag flagpole)) lower-flag lower)
+						   (((set-state flagpole t) (raise-flag flagpole ?x)) 
 						    raise-flag raise))))) )) 
 ;how do I deal with 3 arguments, raise the french flag on the flagpole. 
 			      
@@ -355,6 +362,8 @@
 ;change all these ts and nils to (fixed nil) (hidden t) etcetera. Instead of a hidden value maybe I should say what container its in? 
 ;this might make it easier to keep track of when writing things as a 3rd party. 
 ;for hidden objects, the description clearly refereneces the container, but it is not clear from the code what the container is. 
+;REWRITE THE FUNCTIONAL stuff so that the functions have commands just like features. I think it'll be one less parentheses because each command should
+;have just one function associated with it I think, unlike activating a feature which can spill over to other areas. 
 (defparameter *object-locations* '((home 
 				    (bedroom                     ;why do I have all these in a list? it would be cleaner to just call cdr (bedroom.... and get ((x) (y)) etc.
 				     (girl-photo (you wonder what happened to her.
@@ -362,60 +371,72 @@
 						  (Ontop of your dresser stands a picture of a girl you once knew.) ;this is a descrition to be used. 
 						  nil nil nil) ;this is how to find where to place it. might change to lists if its in
 					;multiple places. 
-				      (family-photo (you stare at the photo of your deceased parents who loved you and wanted you to live
+				     (family-photo (you stare at the photo of your deceased parents who loved you and wanted you to live
 							 and be happy. two people who could not have imagined this happening. 
 							 just like the rest of you. Except lucky enough to have never been proven wrong.)
 						    (and beside it stands a photo of your parents.) 
 						    nil nil nil)
-				      (newspaper (everyone knows the press is compromised and that this is particualry bad 
-							   even for propaganda. However it would probably look suspicous to quit reading it.
-							   and as of yet you havent worked up the courage to buy one of those underground
-							   papers youve heard about. listening to the bbc broadcast each night like everyone
-							   has been enough for you so far.)
-						 (Over on the table is a newspaper.)
-						 nil nil nil)
-				      (pistol (a small pistol of your fathers. it seems surreal that you might need it.)
-					      (Inside a wooden box towards the back of the drawer lies a pistol.)
-					      bedroom home t t ((fire-weapon 6)))
-				      (journal (a sparse journal of innocent thoughts you hope they dont find.)
-					       (Your journal lies in plain view ontop of your clothes. 
-						     You feel like you should always be able to get to it easily even though
-						     you rarely ever need to.)
-					       t t ((write))) 
-				      (bible (your parents bible. a family heirloom you suppose. though you never revered it much. 
-						   Its focus is on a people who arent yours in a place youve never been and a time you can hardly comprehend. 
-						   In these days of consequence though it feels more relavent.)
-					     (tucked in the corner supporting the other books that lay against it is your parents bible.); it feels strage to leave something so fragile
+				     (watch (a simple watch youve had for quite some time. functional and elegant still despite the wear.)
+					    (laying between the photos is your watch in a loose loop.)
+					    t nil ((get-time)))
+				     (newspaper (everyone knows the press is compromised and that this is particualry bad 
+							  even for propaganda. However it would probably look suspicous to quit reading it.
+							  and as of yet you havent worked up the courage to buy one of those underground
+							  papers youve heard about. listening to the bbc broadcast each night like everyone
+							  has been enough for you so far.)
+						(Over on the table is a newspaper.)
+						nil nil (((read ?x) read))) ;?x will be the contents of that days newspaper. 
+				     (pistol (a small pistol of your fathers. it seems surreal that you might need it.)
+					     (Inside a wooden box towards the back of the drawer lies a pistol.)
+					     t t (((fire-weapon 6) shoot fire)
+						  ((reload ?x) reload) ;?x will be amount of ammo that can be spared. 
+						  ((brandish) brandish reveal)))
+				     (journal (a sparse journal of innocent thoughts you hope they dont find.)
+					      (Your journal lies in plain view ontop of your clothes. 
+						    You feel like you should always be able to get to it easily even though
+						    you rarely ever need to.)
+					      t t (((write) write))) 
+				     (passport (documents bearing your material description and within what bounds you lie. 
+							  A piece of paper to denounce you. Its only a liability but they wont let you
+							  exist without bearing it. it is like a border carried with you. extra scrutiny
+							  when passing between arbitrary locales.)
+					       (on the dresser)
+					       t t (((present) present)))
+			      
+				     (bible (your parents bible. a family heirloom you suppose. though you never revered it much. 
+						  Its focus is on a people who arent yours in a place youve never been and a time you can hardly comprehend. 
+						  In these days of consequence though it feels more relavent.)
+					    (tucked in the corner supporting the other books that lay against it is your parents bible.); it feels strage to leave something so fragile
 					; out in the open. It is not a living thing but a bundle of paper needing one to stave off the rot.) 
 						  t t ((read-text txt))))
 				    (bathroom
 				     (razor-blade (these still arent difficult to find. but you use it sparingly in case there becomes a scarcity.
-						    you consider its usefulness if you were caught. you could not pick a lock with it.
-						    and you doubt you could kill more than a single captor with it. 
-						    you shudder at needing to use it on yourself. could you?)
-					     (a razor-blade lies flat inside the cabinet.) 
-					     t t ((cut)))
-				      (razor (you havent felt a need to shave lately. but this blade is still fairly fresh.)
-					     (next to it is the metal wand which holds them.) 
-					     t t ((shave))) ;this is kind of weird, because next to is relative, and the contents can change. 
-				      (shaving-cream (you remember it makes a very nice lather. you can wash and soothe your face here at home. and yet in the middle
-							  of a battle-zone where war is fought in the shadows. men on the front don't have these comforts.
-							  You wonder if you would give it up for a little honest and open resistance. at least in on the battlefield
-							  youre not sharing space with the enemy. you dont fall asleep behind enemy lines out on the front.)
-						     (in a tube with a flat tail slightly curled is your shaving cream.)
-						     t t ((apply)))
-				      
-				      (cologne (another item you find no need for. you wish you could care about how women thought you smelled.
-							but the women you will meet in the resistance probably dont care a bit about that kind of thing anymore.)
-					       (in the corner is a bottle of cologne half empty.)
-					       t t ((apply)))))
+							 you consider its usefulness if you were caught. you could not pick a lock with it.
+							 and you doubt you could kill more than a single captor with it. 
+							 you shudder at needing to use it on yourself. could you?)
+						  (a razor-blade lies flat inside the cabinet.) 
+						  t t ((cut)))
+				     (razor (you havent felt a need to shave lately. but this blade is still fairly fresh.)
+					    (next to it is the metal wand which holds them.) 
+					    t t ((shave))) ;this is kind of weird, because next to is relative, and the contents can change. 
+				     (shaving-cream (you remember it makes a very nice lather. you can wash and soothe your face here at home. and yet in the middle
+							 of a battle-zone where war is fought in the shadows. men on the front don't have these comforts.
+							 You wonder if you would give it up for a little honest and open resistance. at least in on the battlefield
+							 youre not sharing space with the enemy. you dont fall asleep behind enemy lines out on the front.)
+						    (in a tube with a flat tail slightly curled is your shaving cream.)
+						    t t ((apply)))
+				     
+				     (cologne (another item you find no need for. you wish you could care about how women thought you smelled.
+						       but the women you will meet in the resistance probably dont care a bit about that kind of thing anymore.)
+					      (in the corner is a bottle of cologne half empty.)
+					      t t ((apply)))))
 				   (cafe
 				    (basement
-				     ;include some history about it. 
+					;include some history about it. 
 				     (french-flag (the chromatic trinity. two contrasted color and the blank gape between them.) ;breach instead of gape? 
 						  (its furled up in barrel.) ;change this depending on its locations. 
-						  t t ((apply))))))) 
-				      
+						  t t (nil))))))
+
 					     
 						   
 					     
@@ -432,10 +453,11 @@
 ;these are all the objects that you can pickup.
 (defparameter *items* nil)
 
-;containers can be inspected for a description, or opened for a list of contents. ending value is if its locked or not. also add one for hidden, like a wall-safe? first
-;is now hidden, second is being viewed, third is locked, fourth equippable
+;containers can be inspected for a description, or opened for a list of contents. 
+;first is now hidden, second is being viewed, third is locked, fourth equippable
 ;There's some overlap between containers and objects I think. Example: briefcase, it contains
 ;items, but its also something equippable. add a fourth value for equippable? 
+;do I include a description of the items beyond their location? 
 (defparameter *container-locations* '((home 
 				       (bedroom
 					(dresser (a dresser stands in the corner containing various possessions of yours.)
@@ -446,14 +468,16 @@
 						 (wine baguette butter) nil nil nil nil)
 					(bookshelf (a sparse bookself stands not too high.)
 						   (bible) nil nil nil nil))
-				       
 				       (bathroom 
 					(cabinet (behind the mirror is a nook for your toiletries. strange to be at war and still have these luxuries.) ;easements?
 						 (cologne shaving-cream razor-blade razor) nil nil nil nil)))
 				      (cafe (basement
 					     (briefcase (sitting under the table is a briefcase.)
 							(pamphlets) 
-							 nil nil t t)))))
+							 nil nil t t)
+					     (barrels (there are some barrels in the corner.)
+							     (french-flag)
+							     nil nil nil nil)))))
                                          
                                              
 (defstruct person
@@ -502,9 +526,10 @@
 
 (defparameter *command-synonyms* '((explore (look-around lookaround look search investigate))
                                    (walk (travel move go goto go-to))
-                                   (inspect (investigate look-at lookat view check-out checkout check search scan watch see))
-                                   (time (watch clock hour minute))
+                                   (inspect (investigate look-at lookat view check-out checkout check search scan see))
+                                   (time (clock hour minute))
                                    (take (keep pocket store))
+				   (inventory (items stash posessions objects))
 				   ))
 
 ;this will be used to store the history of a playthrough, and then you can replay a game to that point. useful for testing.
@@ -561,9 +586,9 @@
                              ,(make-person
                                :name '(Jean Augustin)
                                :appearance 
-			       '(a man not that much older than you. he appears weathered and this experience seems the source of his confidence.
+			       '(a man not that much older than you. he appears weathered and this worn experience seems the source of his confidence.
                                                he seems to know what is required. and sure in what he is capable of.)
-                               :location-description '(he sits at a table looking over documents.)
+                               :location-description '(a man sits at a table looking over documents.)
                                :location '(basement cafe))))
 
 
@@ -643,16 +668,16 @@
 (defun rollover-hr (hr)
   (list (round (/ hr 24)) (- hr (* 24 (round (/ hr 24)))))) 
 
-;have this return an error if it gets a destination that isn't a location. 
+;have this return an error if it gets a destination that isn't a location. !! broken!!! 1-31
 (defun get-distance (destination)
   (dolist (i (get-street-routes))
     (if (equal (car i) destination)
         (return (third i))))) 
-  
+
+;I get a frequent error here when destination is passed in as nil. It usually reveals an error some where else, but maybe I should add a check here? 
+;previously the error was caused because do-command wasn't checking walk (location) it was just checking walk, then chaging location to obj, thus telling 
+;change-location1 to change the location to (entrance), and thus screw up get-distance. ITS OVERLOADING THE BUFFER!?!?!  
 (defun distance-time (destination) 
-  ;I get a frequent error here when destination is passed in as nil. It usually reveals an error some where else, but maybe I should add a check here? 
-  ;previously the error was caused because do-command wasn't checking walk (location) it was just checking walk, then chaging location to obj, thus telling 
-  ;change-location1 to change the location to (entrance), and thus screw up get-distance. ITS OVERLOADING THE BUFFER!?!?!
   (inc-game-time 0 (* 12 (get-distance destination)) 0 0))   
 
 ;every action takes a minute? I think this gives the player game-time to imagine everything that happens. this might be too short for reading a letter, 
@@ -736,6 +761,9 @@
 (defun describe-location ()
   (second (get-location))) 
 
+(defun outside-location ()
+  `(you are in front of the ,(get-location)))
+
 ;this could use the player-location instead of area, just always describe where they are. 
 (defun describe-area ()
   (second (get-area)))  
@@ -750,9 +778,9 @@
 
 (defun change-location1 (location)
   (distance-time location)
-  (setf (second (person-location *player*)) location))
- ; (print-description (describe-location)))
-;  (change-area1 (car (third (assoc (current-location) *map*)))))
+  (setf (second (person-location *player*)) location)
+  (if (not (equal (current-area) 'street))
+      (change-area1 'street)))
 
 (defun change-area ()
   (setf (first (person-location *player*)) (read))
@@ -775,9 +803,10 @@
 ;change this so that the street is randomized each visit. might have a patrol coming through, might be merchants (though this should be more static)
 ;and pedestrians. a person you recognize might even appear (which could be a problem if they're an enemy who recongizes you). 
 (defun describe-street ()
-  (list (describe-location)
-  (second (assoc 'streets *map*))
-  (second (assoc (current-location) (cdr (assoc 'streets *map*))))))
+  (list 	
+   (second (assoc (current-location) (cdr (assoc 'streets *map*))))
+	(second (assoc 'streets *map*))
+	(describe-location)))
        
 (defun get-street-routes ()
   (cdr (cdr (assoc (current-location) (cdr (assoc 'streets *map*))))))
@@ -903,7 +932,7 @@
   
 
 ;write a macro for this so i don't have to write all the assocs and setf. 
-(defun change-state (feature)
+(defun change-state (feature &optional &rest objects) ;should this include an optional object? changing the state of a chain requires cutting-tool.
   (setf (car (nth 3 (cdr (assoc feature (cdr (assoc (current-area) (cdr (assoc (current-location) *area-features*))))))))
 	(null (car (nth 3 (cdr (assoc feature (cdr (assoc (current-area) (cdr (assoc (current-location) *area-features*))))))))))
   (if (describe-state feature)
@@ -915,6 +944,7 @@
   (if (describe-state feature)
        (print-description (describe-state feature))))
 
+;return t if the feature is capable of activation/interaction. 
 (defun feature-functions-p (feature)
   (nth 4 (cdr (assoc feature (get-features))))) 
 
@@ -971,9 +1001,10 @@
 	(dolist (cmd (get-feature-commands feat))
 	  (push cmd *commands*))))
 
+;GETS RID OF EVERYTHING ELSE TOO. 
 (defun remove-feature-commands ()
   (dolist (i *commands*)
-    (if (member i (list-all-feature-commands))
+    (if (not (member i (list-all-feature-commands)))
 	(setf *commands*
 	      (remove i *commands*)))))
 
@@ -998,28 +1029,58 @@
        t
        nil)) 
 
-;and do the commands. 
-(defun match-command-feature-function (cmd feat &optional obj)
+;and do the commands. This should only match if it can match everything. Raising a flag with no flag in your possession should do NOTHING. 
+(defun match-command-feature-function (cmd feat &optional &rest objs)
   (if (feature-functions-p feat)
       (dolist (fun (get-feature-functions/commands feat))
 	(if (member cmd fun)
 	    (dolist (f (car fun))
-	      (eval f))))
+;NEW 1-31
+;	      (print f)
+;	      (princ "complete? ")
+;	      (princ (complete-function-p f))
+	      (if (complete-function-p f)
+		  (eval (ready-func-eval f))
+		  (eval (ready-func-eval (replace-vars f objs))))))) ;this isn't evaluating I don't think. 
+;NEED AN ELSE HERE that'll fix the function by taking objs, and editing the ?x in the x to match objs. 
       (print-description `(the ,feat doesnt seem to be working.))))
 
 ;this is so you don't have to put quotes inside the definition of feature-functions. when it tries to evaluate them, it'll add a quote to each argument. 
 (defun ready-func-eval (func)
   (let ((function nil))
     (dolist (i (cdr func))
-      (push `(quote ,i) function))
+      (if (and (not (equal i t)) (not (equal i nil)))
+	  (push `(quote ,i) function)
+	  (push i function)))
     (setf function (reverse function))
     (push (car func) function)
     function))
-    
-	     
+  
+;will I ever need this? 
+(defun get-vars (lst)
+  (let ((vars nil))
+    (dolist (i lst)
+      (if (member '? (explode i))
+	  (push i vars)))
+    (reverse vars)))
+
+;this will replace all the ?x variables in a function with the proper arguments. 
+;How do I know which the proper ones are? right now it'll only take an additional obj even though its &rest. just assume that 
+;doesn't use rest, because it gets called from a function that uses &rest, so items will already be known and in a list. this makes it less general though... 
+(defun replace-vars (func objs)
+  (let ((fun func))
+;	(vars (get-vars func))
+    (let ((vars (get-vars func)))
+      (if (equal (length objs) (length vars))
+	  (dotimes (i (length objs))
+	    (setf fun (sublis `((,(nth i vars) . ,(nth i objs))) fun)))))
+    fun))
+
+     
 ;this will be a list from features or objects. its complete if it doesn't contain any object variables. it either has at least one, beginning with ?x, or none. 
+;DOESNT WORK!?!?
 (defun complete-function-p (func)
-  (if (not (member (quote '?x) func))
+  (if (not (member '?x func))
       t
       nil))
 
@@ -1082,12 +1143,11 @@
 
 ;shouldn't this "dispense" the flag that is waving. I have no way of reprsenting that right now... 
 (defun lower-flag (flagpole) 
-  (edit-feature-description flagpole nil))
-
+  (overwrite-feature-description flagpole nil))
 
 ;is flag a name or the object itself? 
 (defun raise-flag (flagpole flag)
-  (edit-feature-description flagpole (object-description flag)))
+  (overwrite-feature-description flagpole (object-description flag)))
 
 ;==================================================================================================================================
 ;OBJECTS
@@ -1188,19 +1248,22 @@
   (cdr (assoc (current-area) (cdr (assoc (current-location) *object-locations*))))) 
 ;  (second (assoc (current-area) (cdr (assoc (current-location) *object-locations*))))
 
+(defun get-all-objects ()
+  (append (cdr (assoc (current-area) (cdr (assoc (current-location) *object-locations*)))) *inventory*)) 
+
 (defun get-object-names ()
   (let ((lst nil))
     (dolist (i (get-objects))
       (push (car i) lst))
     (reverse lst)))
 
+;this uses all-objects so that it can access description of items in your possession, like the flag. 
 (defun object-description (obj)
-  (second (assoc obj (get-objects))))
+  (second (assoc obj (get-all-objects))))
 
 (defun inspect-object (obj)
   (print-description (object-description obj))
   (fresh-line))
-
 
 (defun unhide-object (obj)
   (setf (nth 5 (cdr (assoc obj (get-objects)))) nil))
@@ -1303,11 +1366,11 @@
 ;change, and then show that information. 
 (defun list-area ()
   (let ((lst nil))
-    (awhen-cond ((describe-noise) (push it lst)) ;this makes sense, you'd hear something as you approach before you see it. 
-		((describe-contents) (push it lst))
+    (awhen-cond ;((describe-noise) (push it lst)) ;this makes sense, you'd hear something as you approach before you see it. 
+	;	((describe-contents) (push it lst))
 		((describe-area) (push it lst))
 		((on-street) 
-		 (dolist (i (describe-street)) (push i lst))
+		 (dolist (i (cdr (describe-street))) (push i lst))
 		 (dolist (i (get-street-routes)) (push (show-route i) lst)))  
 		((show-persons) (push it lst))
 		((describe-features) (push it lst))
@@ -1316,8 +1379,6 @@
 		((describe-paths) (push it lst)))
     (reverse lst))) 
       
-
-
 ;why does this produce nil between certain things? 
 (defun print-room ()
   (dolist (i (list-area)) (print i))) 
@@ -1449,26 +1510,42 @@
 (defun play ()
 ;  (print-description (describe-location))
   (add-feature-commands) ;more efficient if I added this to change-area...  
+  (awhen-cond ((describe-contents) (print-description it))
+	      ((describe-noise) (print-description it))
+	      ((on-street) (print-description (car (describe-street)))))
+  (format t "==========================================================================~%")
   (display-room)
   (format t "~%- ")
   (let ((read (parse (read-list))))
     (when (not (equal (car read) 'quit))
       (let ((cmd (find-command read)))
-        (let ((obj nil))
-          (cond ((find-area read) (setf obj (find-area read)))
-                ((find-location read) (setf obj (find-location read)))
-                ((find-entrance read) (setf obj (entrance)))
-                ((find-object read) (setf obj (find-object read)))
-                ((find-direction read) (setf obj (closest-along-route (find-direction read))))
-                ((find-inventory read) (setf obj (find-inventory read)))
-                ((find-container read) (setf obj (find-container read)))
-		((find-feature read) (setf obj (find-feature read))))
-          (do-command cmd obj)))
-      (play)))) 
+        (let ((objs nil))
+          (awhen-cond ((find-area read) (push it objs))
+		 ((find-location read) (push it objs))
+		 ((find-entrance read) (push it objs))
+		 ((find-object read) (push it objs))
+		 ((find-direction read) (push (closest-along-route it) objs))
+		 ((find-inventory read) (push it objs)) ;this might push things twice since get-objects is looking at inventory too. 
+		 ((find-container read) (push it objs))
+		 ((find-feature read) (push it objs)))
+	  ;objs will need to be reversed. 
+	  (setf objs (quote-all objs))
+	  (if (null objs) ; ,@nil was causing problems I think, so this safeguards it. 
+	      (eval (do-command cmd nil))
+	      (eval `(do-command ',cmd ,@objs))))) ;this ',@ won't work for multiple objects I don't think, so watch out!
+      (play))))
   
+(defun quote-all (lst)
+  (let ((quoted nil))
+    (dolist (i lst)
+      (push `(quote ,i) quoted))
+    (reverse quoted)))
+ 
 
 ;stupid parser. probably as stupid as can be. this should return the command and the object if there is one. I'll have a do-command function
 ;should this be expanded to feature commands with and, like pick up the bottle and smash him on the head? or shoot that guy and that guy? 
+;So this is capable of retrieving multiple commands and objects, so what I need is a way to match items up, or create commands that require more than 1 object... 
+;feature-commands don't appear in the parse because a) I don't have a list of them, and because the command is triggered in do command. 
 (defun parse (phrase)
   (let ((cmd nil))
     (dolist (i phrase)
@@ -1489,6 +1566,7 @@
               (member i (list-areas)))
           (push i cmd)))
     (reverse cmd)))
+
 
 ;Write a function to act follow up questions. if you're going between rooms and there are stairs going up, going down, and a door, you should be able to
 ;say "stairs" and then it'll ask you: which ones? 
@@ -1533,10 +1611,17 @@
   (find-in-phrase parsed-phrase (list-features)))
 
 ;should I add some error messages in here? 
-(defun do-command (cmd obj)
+(defun do-command (cmd obj &optional &rest objs) ;single command could have multiple objects. Need a way to make sure the extra object applies to command. this is getting unwieldy. 
+  (print cmd)
+  (print obj)
+  (fresh-line)
+  (setf objs (quote-all objs))
+;  (print objs)
   (push (list cmd obj) *command-history*) ;this probably isn't the best place to do it as somegame-times cmd will be nil. 
-  (cond ((and (not (on-street)) (equal cmd 'walk)) (change-area1 obj))
+  (cond ((and (not (on-street)) (equal cmd 'walk) (member obj (list-areas))) (change-area1 obj))
         ((and (not (on-street)) (null cmd) (member obj (list-areas))) (change-area1 obj))
+	((and (not (on-street)) (null cmd) (member obj (list-locations))) (change-location1 obj))
+	((and (not (on-street)) (equal cmd 'walk ) (member obj (list-locations))) (change-location1 obj))
         ((and (on-street) (equal cmd 'walk) (member obj (list-locations))) (change-location1 obj))
         ;this handles saying go inside, or walk inside which is essentially a synonym of enter, find another way to treat it as such? 
         ((and (on-street) (equal cmd 'walk) (equal obj (entrance))) (change-area1 obj)) 
@@ -1553,11 +1638,12 @@
         ((equal cmd 'take) (take obj))  
         ((equal cmd 'equip) (equip obj)) 
         ((equal cmd 'open) (open-> obj))
+	((equal cmd 'close) (close-> obj))
         ((equal cmd 'inventory) (show-inventory))
-	((command-match-feature cmd obj) (match-command-feature-function cmd obj))
+	((command-match-feature cmd obj) (eval `(match-command-feature-function ',cmd ',obj ,@objs))) ;OBJS is () remember! or is it if its singular?  
+
         ((equal cmd 'inspect) (print-inspection obj))
 						;		 (inspect-object obj))
-	
 )) ;I'm not sure that I want on-street to handle the descriptive part.  
 ;With features, I add all the recognized commands to the list, but those commands need to be converted to the appropriate 
 ;set/change-state command. so turn-on might be passed to parser, but should be converted to (set-state t)? 
@@ -1583,6 +1669,7 @@
 ;=================================================================================================================
 ;CREATION FUNCTIONS this is how a user can use the engine.   
 ;=================================================================================================================
+
 (defun create-location ()
   (push (list (name-location) (create-area)) *map*)) ;I need to make sure that this saves the map. 
   
@@ -1687,6 +1774,17 @@
 	  (if (equal (car obj) object)
 	      (return-from nested-loop (list (car area) (car loc)))))))))
 
+(defun get-object (object)
+  (if (assoc object *inventory*)
+      (assoc object *inventory*)
+      (block nested-loop 
+	(dolist (loc *object-locations*)
+	  (dolist (area (cdr loc))
+	    (dolist (obj (cdr area))
+	      (when (equal (car obj) object)
+		(return-from nested-loop obj))))))))
+
+
 ;maybe write a way for element to not be a number, but convert something like 'description to 0. would be better for UI. 
 (defun edit-object-element (object element replacement)
   (let* ((lst (get-object-loc+area feature))
@@ -1722,7 +1820,7 @@
   (let* ((lst (get-feature-loc+area feature))
 	 (area (car lst))
 	 (loc (second lst)))
-    (setf (nth element (assoc area (cdr (assoc loc *area-features*))))
+    (setf (nth element (assoc feature (cdr (assoc area (cdr (assoc loc *area-features*))))))
 	  change)))
 
 ;add feature to the front. 
@@ -1779,4 +1877,4 @@
 
 ;this will overwrite the description of what's on the flagpole, or any other feature. 
 (defun overwrite-feature-description (feature rewrite)
-  (edit-feature feature 1 rewrite)) 
+  (edit-feature feature 1 rewrite))  
