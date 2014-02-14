@@ -327,7 +327,7 @@
 					    nil (t (you pull down on the rope to hoist the flag up.) 
 						   (you make the flag rappel down the pole leaving it bare.)) ;rappel?
 						t ((((set-state flagpole nil) (lower-flag flagpole)) lower-flag lower)
-						   (((set-state flagpole t) (raise-flag flagpole ?x)) 
+						   (((set-state flagpole t) (raise-flag flagpole ?x))  ;I want this flagpole to be implicit... 
 						    raise-flag raise))))) )) 
 ;how do I deal with 3 arguments, raise the french flag on the flagpole. 
 			      
@@ -433,7 +433,7 @@
 				   (cafe
 				    (basement
 					;include some history about it. 
-				     (french-flag (the chromatic trinity. two contrasted color and the blank gape between them.) ;breach instead of gape? 
+				     (french-flag (the chromatic trinity wafts at the pinnacle. two contrasted color and the blank gape between them.) ;breach instead of gape? 
 						  (its furled up in barrel.) ;change this depending on its locations. 
 						  t t (nil))))))
 
@@ -1009,6 +1009,7 @@
 	      (remove i *commands*)))))
 
 
+;I THINK THESE NEXT TWO ARE USELESS!
 ;add these to *commands* as long as the player is in the room with the feature. put this in play?
 (defun access-feature-functions (feature) 
   (dolist (i (list-features))
@@ -1028,6 +1029,12 @@
   (if  (member cmd (get-feature-commands feat))
        t
        nil)) 
+
+(defun find-command-match (cmd)
+  (when (member cmd (list-all-feature-commands))
+    (dolist (feat (get-features))
+      (when (command-match-feature cmd (car feat)) ;this will just find the first one, so in cases where there's a conflict, this function is pretty dumb.
+	(return (car feat))))))
 
 ;and do the commands. This should only match if it can match everything. Raising a flag with no flag in your possession should do NOTHING. 
 (defun match-command-feature-function (cmd feat &optional &rest objs)
@@ -1641,6 +1648,8 @@
 	((equal cmd 'close) (close-> obj))
         ((equal cmd 'inventory) (show-inventory))
 	((command-match-feature cmd obj) (eval `(match-command-feature-function ',cmd ',obj ,@objs))) ;OBJS is () remember! or is it if its singular?  
+	((find-command-match cmd) (setf ob (find-command-match cmd)) ;this handles the case that the feature is implicit, in which case obj is supposed to be objs
+	 (eval `(match-command-feature-function ',cmd ',ob ',obj))) ;YEAH, this works, but watch out for potential problems.... turn-on turns on radio.  
 
         ((equal cmd 'inspect) (print-inspection obj))
 						;		 (inspect-object obj))
