@@ -36,9 +36,11 @@
    (else (cons (car list) (delete item (cdr list))))))
 
 (define (delete-assoc item lst)
+  "deletes an association list."
   (delete (assoc item lst) lst))
 
 (define (replace target item source)
+  "replaces an element in a list."
   (replace-aux target item source '()))
 
 (define (replace-aux target item source replacement)
@@ -180,6 +182,7 @@
   (list-index-aux element lst 0))
 
 (define (list-index-aux element lst position)
+  "returns position of element in a list. -1 if abscent."
   (if (null? lst)
       -1
       (if (equal? element (car lst))
@@ -273,7 +276,7 @@
   (load-path 'file-paths *paths*) ;this doesn't overwrite the previous path though. 
   (set! *path-map* (access-file 'file-paths)))
 
-(map-paths)
+;(map-paths)
 ;then write some stuff about searching for a file-name in the list,
 ;retrieving it to be loaded. 
 
@@ -325,8 +328,26 @@
 	      (set! verse 0))) ;resets verse when chapter changes.
        (if (and (not (book? line)) (not (chapter? line)))
 	   (set! verse (1+ verse)))
-       (table-set! table (list book chapter verse) line)) 1)
+       (table-set! table (list book chapter verse) line)) 1) 
     (set! *open-paths* (cons (cons 'bible table) *open-paths*))))
+;need to include the same fail-safe here of overwriting itself in open-paths if its already there
+ 
+
+;(define (get-book book)
+ ; )
+
+;(define (get-book-aux book chapter verse) )
+
+(define (get-verse book chapter verse)
+  (table-ref! *bible* (list book chapter verse)))
+
+(define (get-verse-sequence book chapter at end)
+  (if (equal? at end)
+      (table-ref *bible* (list book chapter at))
+      (begin
+	(table-ref *bible* (list book chapter at))
+	(get-verse-sequence book chapter (1+ at) end))))
+
 
 ;===============================================================================
 ;===============================================================================
@@ -429,7 +450,9 @@
 (define *alphabet* (string->list "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"))
 
 (define (access-file name)
-  (cdr (assoc name *open-paths*)))
+  (if (assoc name *open-paths*)
+      (cdr (assoc name *open-paths*))
+      #f))
 
 (define *word-types* '(("n" . NOUN:) ("v" . VERB:) ("a" . ADJECTIVE:) ("r" . ADVERB: )))
 
@@ -484,3 +507,6 @@
 
 (define *dictionary* "~/Projects/DICTIONARIES/WordNet-3.0/dict/word-list.txt")
 (load-path 'dictionary *dictionary*) 
+
+;Map the paths here
+(map-paths)
