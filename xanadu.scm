@@ -1,9 +1,9 @@
-;XANADU
 
 ;write my own format function. So I guess it'll take something like 
 ;"hello ~S" and would create a println with "hello " then substitute the
 ;variable given for ~S. would also be nice to format spacin for line-nums. 
 ;(define-macro (printf string . values)
+  
 ;this will need an auxiliary that'll go through the string and find formatting
 
 ;brings in some novak utility code like while, dolist, dotimes
@@ -16,7 +16,7 @@
   (list-ref lst n))
 
 (define (last lst)
-  (nthcdr (1- (length lst)) lst))
+  (car (nthcdr (1- (length lst)) lst)))
 
 (define-macro (push var #!optional val)
   `(set! ,var (cons ,val ,var)))
@@ -29,6 +29,35 @@
 
 (define-macro (dec n)
   `(set! n (- n 1)))
+
+(define (delete item list)
+  (cond
+   ((equal? item (car list)) (cdr list))
+   (else (cons (car list) (delete item (cdr list))))))
+
+(define (delete-assoc item lst)
+  (delete (assoc item lst) lst))
+
+(define (replace target item source)
+  (replace-aux target item source '()))
+
+(define (replace-aux target item source replacement)
+  (if (null? source)
+      (reverse replacement)
+      (if (equal? (car source) target)
+	  (replace-aux target item (cdr source) (cons item replacement))
+	  (replace-aux target item (cdr source) (cons (car source) replacement)))))
+
+;fix this up so it doesn't have to take #\c as input, but could take in a string "c" as well. 
+(define (replace-char target ch string)
+  (list->string (replace target ch (string->list string))))
+
+(define (before? a b lst)
+  "returns #t if a occurs before b in the lst"
+  (if (and (member a lst) (member b lst))
+      (> (length (member a lst))
+	 (length (member b lst)))
+      "either a or b is not in the list.")) ;should use a better method of error breaking. 
 
 ;weird that this is required to set lists. 
 (define (list-set! list k val)
@@ -130,9 +159,32 @@
 	string
 	(trim-punctuation (trim-string string)))))
 
+;this is pretty dumb, it returns a string, not a char. 
 (define (last-char string)
   (let ((str (string->list string)))
-    (list->string (last str))))
+    (if (not (null? str))
+	(last str))))
+
+(define (first-char string)
+  (let ((str (string->list string)))
+    (if (not (null? str))
+	(car str))))
+
+;maybe convert ch to a char if it isn't. 
+(define (find-char ch word)
+  "will return at what place in a word the first instance of the char appears."
+  (let ((word (string->list word)))
+    (list-index ch word)))
+
+(define (list-index element lst)
+  (list-index-aux element lst 0))
+
+(define (list-index-aux element lst position)
+  (if (null? lst)
+      -1
+      (if (equal? element (car lst))
+	  position
+	  (list-index-aux element (cdr lst) (1+ position)))))
 
 (define (last-word string)
   "returns the last word minus punctuation."
@@ -154,11 +206,15 @@
       0))
   
 ;===============================================================================
+;===============================================================================
 ;PATHS
 ;===============================================================================
 
 (define *paths* "~/Projects/paths.txt")
 
+(define *path-map* '())
+
+;path-names should be hyphenated, but if they aren't, I can fix them up. 
 (define (write-path path-name path)
   (with-output-to-file (list path: *paths*
 			     append: #t)
@@ -172,31 +228,60 @@
 ;too. I guess I should write them to a file, each entry with its table and key, followed by
 ;the contents. 
 
+;an open path is defined as a pair of name and map that is in the list open-paths. 
+(define (path-opened? pathname)
+  (if (assoc pathname *open-paths*)
+      #t
+      #f))
 
-(define (load-path filename)
+(define (load-path name filename)
   "puts a file into a hasmap, and pushes it onto *open-paths*"
   (let ((table (make-table)))
-    (fold-lines-in-file filename
+    (fold-lines-in-file 
+     filename
      (lambda (line line-number)
        (table-set! table line-number line)
        (1+ line-number)) 1)
-    (set! *open-paths* (cons table *open-paths*))))
-
+    ;check if the path is already there, if it is overwrite the old entry. 
+    (if (path-opened? name)
+	(set! *open-paths* (cons (cons name table) (delete-assoc name *open-paths*))) ;use replace here? 
+	(set! *open-paths* (cons (cons name table) *open-paths*)))))
     ;(push *open-paths* table)))
      
+(define (path-ref n)
+  (table-ref *path-map* 1))
 
-;can I not use a list? must it be a number? 
-;(define (load-bible)
- ; (let ((table (make-table)))
-  ;  (read-bible-with-index
-   ; (set! *open-paths* (cons table *open-paths*))))
+(define (user-load-path number)
+  (let ((entry (path-ref number)))
+    (load-path (get-file-name entry) (get-file-path entry))))
 
+(define (get-file-name entry)
+  (condense-name (substring entry 0 (find-char #\: entry))))
+
+;come back to this and decapitalize the string. 
+(define (condense-name name)
+  (string->symbol (list->string (replace #\space #\- (string->list name)))))
+
+(define (get-file-path entry)
+  (substring entry (find-char #\~ entry) (string-length entry)))
+
+(define (remove-path path-name)
+  (set! *open-paths* (delete-pair path-name *open-paths*)))
+
+;make sure to call this whenever paths file is updated.
+(define (map-paths)
+  (load-path 'file-paths *paths*) ;this doesn't overwrite the previous path though. 
+  (set! *path-map* (access-file 'file-paths)))
+
+(map-paths)
 ;then write some stuff about searching for a file-name in the list,
 ;retrieving it to be loaded. 
 
 ;===============================================================================
+;===============================================================================
 ;BIBLE processing stuff
 ;===============================================================================
+;why on earth does it always say this is an unbound variable!?!?!
 (define *bible* "~/Projects/xanadu/the-holy-bible/kjv-text-only.txt")
 
 (define *bible-books* '("ECCLESIASTES" "SONG OF SOLOMON" "HOSEA" "JOEL" "AMOS" "OBADIAH" "JONAH" "MICAH" "NAHUM" "HABAKKUK" "ZEPHANIAH" "HAGGAI" "ZECHARIAH" "MALACHI" "EZRA"  "SONG OF SOLOMON" "THE PROVERBS"  "THE LAMENTATIONS OF"  "THE GOSPEL ACCORDING TO" "THE ACTS OF THE APOSTLES" "EPISTLE OF"  "EPISTLE GENERAL OF" "THE REVELATION OF" "GENESIS" "EXODUS" "NUMBERS" "LEVITICUS" "DEUTERONOMY" "THE BOOK OF" "SAMUEL" "THE KINGS" "CHRONICLES"))
@@ -219,7 +304,31 @@
 (define (psalm? line)
   (exact-subset? (string->list "PSALM") (string->list line)))
 
+;I tried writing this using an index list instead of book, chap, vers, but it mapped
+;everything to the final value of index for some weird reason. 
+;way too slow. 
+(define (load-bible)
+  "Maps the bible with a list containing the index as the key to each verse."
+  (let ((table (make-table))
+	(book 0)
+	(chapter 0)
+	(verse 0))
+    (fold-lines-in-file 
+;     "~/Projects/xanadu/the-holy-bible/genesis.txt"
+     "~/Projects/xanadu/the-holy-bible/kjv-text-only.txt"
+     (lambda (line number)
+       (cond ((book? line) (set! book (1+ book))
+	      (set! chapter 0);resets chapter when book changes. 
+	      (set! verse 0)) ;resets verse when book changes. 
+	     ((or (chapter? line) (psalm? line)) 
+	      (set! chapter (1+ chapter))
+	      (set! verse 0))) ;resets verse when chapter changes.
+       (if (and (not (book? line)) (not (chapter? line)))
+	   (set! verse (1+ verse)))
+       (table-set! table (list book chapter verse) line)) 1)
+    (set! *open-paths* (cons (cons 'bible table) *open-paths*))))
 
+;===============================================================================
 ;===============================================================================
 ;POETRY formatting and processing
 ;===============================================================================
@@ -229,10 +338,12 @@
  ; (map number->string lst)
 
 ;===============================================================================
+;===============================================================================
 ;PROSE formatting and processing
 ;===============================================================================
 
 
+;===============================================================================
 ;===============================================================================
 ;WRITING to files
 ;===============================================================================
@@ -240,6 +351,7 @@
  ; (with-output-to-file filename
    
 
+;===============================================================================
 ;===============================================================================
 ;READING from files
 ;===============================================================================
@@ -307,12 +419,68 @@
 	      (list-set! index 2 (1+ (caddr index))))
 	  (index-lines index mode))))) 
 
+;===============================================================================
+;===============================================================================
+;DICTIONARY
+;===============================================================================
+;Since I've got access to all of C I should really take advantage of the more 
+;intricate features of word-net. It'd be perfect for xanadu!
+
+(define *alphabet* (string->list "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"))
+
+(define (access-file name)
+  (cdr (assoc name *open-paths*)))
+
+(define *word-types* '(("n" . NOUN:) ("v" . VERB:) ("a" . ADJECTIVE:) ("r" . ADVERB: )))
+
+(define (get-word entry)
+  (nth-word 0 entry))
+
+(define (word-type entry)
+  (cdr (assoc (nth-word 1 entry) *word-types*)))
+  
+(define (before-in-alphabet? str1 str2)
+  (before? (first-char str1) (first-char str2) *alphabet*))
+
+;allow this to take in infinite arguments for a much more useful function. 
+(define (lower-letter str1 str2)
+  (if (before-in-alphabet? str1 str2)
+      str1
+      str2))
+
+(define (find-word word)
+  (let ((dict (access-file 'dictionary)))
+    (find-word-aux word dict 1 (table-length dict))))
+
+
+;pretty slow and horrible. use a divide and conquer approach. divide based on letter? 
+(define (find-word-aux word dict start length)
+  (if (eq? start length)
+      #f
+      (if (equal? word (get-word (table-ref dict start)))
+	  (table-ref dict start)
+	  (find-word-aux word dict (1+ start) length))))
+    
+
+;===============================================================================
+;===============================================================================
+;PARSING/NLP
+;===============================================================================
+
+;parse a sentence, then loop up each word. I guess I don't actually need to parse
+;the sentence, but it might be more efficient that way if I only want to look up
+;certain words like a verb or proper noun. 
+
+;===============================================================================
+;===============================================================================
+;INITIALIZE
+;show paths, load the dicionary and any other foundational texts. 
+;===============================================================================
 
 (fold-lines-in-file 
  "~/Projects/paths.txt" 
  (lambda (line line-num) 
    (println line-num "     " line) (1+ line-num)) 1)
 
-
 (define *dictionary* "~/Projects/DICTIONARIES/WordNet-3.0/dict/word-list.txt")
-(load-path *dictionary*) 
+(load-path 'dictionary *dictionary*) 
