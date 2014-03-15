@@ -6,8 +6,11 @@
   
 ;this will need an auxiliary that'll go through the string and find formatting
 
-;brings in some novak utility code like while, dolist, dotimes
+;brings in some novak utility code like while, dolist, dotimes. 
 (load "~/Projects/initdr-novak.scm")
+
+;WHY are all macros so iffy on this? sometimes push works, sometimes it says its an unbound variable.
+;dotimes was working earlier, but not anymore... 
 
 (define (nthcdr n lst)
   (list-tail lst n)) 
@@ -68,7 +71,7 @@
         (list-set! (cdr list) (- k 1) val)))
 
 (define (newline? ch)
-  (if (equal? ch #\newline)
+  (if (or (equal? ch #\newline) (equal? ch #\return))
       #t
       #f))
 
@@ -120,6 +123,20 @@
       (reverse lst)
       (list-string-aux string (1+ place) (cons (nth-word place string) lst))))
 
+;splice-word is not the best name. think of something clearer. 
+(define (splice-word word break-point)
+   (list->string (nthcdr (find-char break-point word) (string->list word))))
+
+;this will be determined by tense as well. 
+(define *contractions* '(("'m" . "am") ("'ve" . "have") ("'s" . "is") ("'ll" . "will")
+			 ("'re" . "are")))
+
+(define (expand-contractions word)
+  "Takes in a single word and expands its form."
+  (string-append  
+   (substring word 0 (find-char #\' word)) " "
+   (cdr (assoc (splice-word word #\') *contractions*))))
+
 (define (nth-char n string)
   (nth n (string->list string)))
 
@@ -152,6 +169,7 @@
       #f))
 
 (define (trim-string string)
+  "trims the last character off a string."
   (list->string (reverse (cdr (reverse (string->list string))))))
 
 (define (trim-punctuation string)
@@ -160,6 +178,39 @@
 	     (not (punctuation? ch)))
 	string
 	(trim-punctuation (trim-string string)))))
+
+(define (trim-spaces string)
+  (trim-spaces-aux (string->list string)))
+
+(define (trim-spaces-aux lst)
+  (if (space? (car lst))
+      (trim-spaces-aux (cdr lst))
+      (if (space? (last lst))
+	  (trim-spaces-aux (string->list (trim-string (list->string lst))))
+	  (list->string lst))))
+
+;TODO: finish this and generalize get-sentence to get nth-sentence. 
+(define (count-sentences string)
+  (+ (char-count #\. string) (char-count #\? string)
+     (char-count #\! string)))
+
+;make sure to not cut off " or parentheses. find at what position sentence end, 
+;convert to list, then nthcdr at that position? 
+(define (get-sentence string)
+  "returns a substring that starts at the beginning of the string until sentence's end."
+  (let ((end (find-punctuation string)))
+    (trim-spaces (substring string 0 (1+ end))))) ;1+ since find-char will return at what place that char is, and we want it included. 
+
+(define (nth-sentence n string)
+  (nth-sentence-aux n string 0))
+
+(define (nth-sentence-aux n string position)
+  (println string)
+  (if (eq? n position)
+      (get-sentence string)
+      (nth-sentence-aux n 
+			(list->string (nthcdr (1+ (find-punctuation string)) (string->list string)))
+				(1+ position))))
 
 ;this is pretty dumb, it returns a string, not a char. 
 (define (last-char string)
@@ -178,13 +229,18 @@
   (let ((word (string->list word)))
     (list-index ch word)))
 
+(define (find-punctuation word)
+  (cond ((find-char #\. word) (find-char #\. word))
+	((find-char #\? word) (find-char #\? word))
+	((find-char #\! word) (find-char #\! word))))
+
 (define (list-index element lst)
   (list-index-aux element lst 0))
 
 (define (list-index-aux element lst position)
-  "returns position of element in a list. -1 if abscent."
+  "returns position of element in a list. #f if abscent."
   (if (null? lst)
-      -1
+      #f
       (if (equal? element (car lst))
 	  position
 	  (list-index-aux element (cdr lst) (1+ position)))))
@@ -207,7 +263,24 @@
 		  (string->list string))
 	(1+ count))
       0))
-  
+ 
+;counts the number of elements in a list.  
+(define (element-count element lst)
+  (element-count-aux element lst 0))
+
+(define (element-count-aux element lst count)
+  (if (null? lst)
+      count
+      (if (equal? element (car lst))
+	  (element-count-aux element (cdr lst) (1+ count))
+	  (element-count-aux element (cdr lst) count))))
+		  
+(define (char-count ch string)
+  "count instances of a char in a string."
+  (element-count ch (string->list string)))
+
+
+
 ;===============================================================================
 ;===============================================================================
 ;PATHS
@@ -237,6 +310,8 @@
       #t
       #f))
 
+;loading a path means mapping its contents and putting that into open-paths. 
+;maybe change name to map-path. maybe more specifically map-poem
 (define (load-path name filename)
   "puts a file into a hasmap, and pushes it onto *open-paths*"
   (let ((table (make-table)))
@@ -276,9 +351,15 @@
   (load-path 'file-paths *paths*) ;this doesn't overwrite the previous path though. 
   (set! *path-map* (access-file 'file-paths)))
 
-;(map-paths)
-;then write some stuff about searching for a file-name in the list,
-;retrieving it to be loaded. 
+;===============================================================================
+;===============================================================================
+;TEXT retrieval and access.
+;===============================================================================
+;make this optional, so that for some files you won't need to specify a book. 
+(define (text-ref text-name index1 index2 index3)
+  (table-ref (access-file text-name) (list index1 index2 index3) #f))
+
+;bring over the bible functions like get-verse and such. make more general. 
 
 ;===============================================================================
 ;===============================================================================
@@ -297,7 +378,7 @@
 (define (check-book line books)
   (if (null? books)
       #f
-      (if (exact-subset? (string->list (car books)) line)
+      (if (exact-subset? (string->list (car books)) line) ;load-bible quits here a lot, and I don't know why. too slow? 
 	  #t
 	  (check-book line (cdr books)))))
 
@@ -309,7 +390,8 @@
 
 ;I tried writing this using an index list instead of book, chap, vers, but it mapped
 ;everything to the final value of index for some weird reason. 
-;way too slow. 
+;way too slow. but I'm not sure why, 'cause fold-lines is recursive?
+;I notice it lags quite a bit at a few parts.  
 (define (load-bible)
   "Maps the bible with a list containing the index as the key to each verse."
   (let ((table (make-table))
@@ -320,6 +402,7 @@
 ;     "~/Projects/xanadu/the-holy-bible/genesis.txt"
      "~/Projects/xanadu/the-holy-bible/kjv-text-only.txt"
      (lambda (line number)
+;       (println book " " chapter " " verse)
        (cond ((book? line) (set! book (1+ book))
 	      (set! chapter 0);resets chapter when book changes. 
 	      (set! verse 0)) ;resets verse when book changes. 
@@ -331,28 +414,80 @@
        (table-set! table (list book chapter verse) line)) 1) 
     (set! *open-paths* (cons (cons 'bible table) *open-paths*))))
 ;need to include the same fail-safe here of overwriting itself in open-paths if its already there
- 
 
-;(define (get-book book)
- ; )
+;==================================================
+;RETRIEVING books, chapters, verses
+;==================================================
+;is I'm using triple indexing for everything, even prose and poems then I should make these
+;more general. chapters in book could apply to a lot more than just the bible. 
+;change names to bible-chapter, bible-book, bible-verse. more general functions can
+;be renamed get-first-index get-second-index get-third-index, get-third-index-sequence. 
 
-;(define (get-book-aux book chapter verse) )
+(define (bible-ref index)
+  (table-ref *bible* index #f))
+
+(define (get-book book)
+  (get-chapter-sequence book 1 (chapters-in-book book)))
+
+(define (get-chapter book chapter)
+  (get-verse-sequence book chapter 1 (verses-in-chapter book chapter)))
+
+(define (get-chapter-sequence book at end)
+  (reverse (get-chapter-sequence-aux '() book at end)))
+
+(define (get-chapter-sequence-aux lst book at end)
+  (if (equal? at end)
+      (cons (get-chapter book at) lst)
+      (get-chapter-sequence-aux (cons (get-chapter book at) lst) book (1+ at) end)))
 
 (define (get-verse book chapter verse)
-  (table-ref! *bible* (list book chapter verse)))
+  (bible-ref (list book chapter verse)))
 
+;return multiple values instead of a list? 
 (define (get-verse-sequence book chapter at end)
-  (if (equal? at end)
-      (table-ref *bible* (list book chapter at))
-      (begin
-	(table-ref *bible* (list book chapter at))
-	(get-verse-sequence book chapter (1+ at) end))))
+  (reverse (get-verse-sequence-aux '() book chapter at end)))
 
+(define (get-verse-sequence-aux lst book chapter at end)
+  (if (equal? at end)
+      (cons (get-verse book chapter at) lst)	
+      (get-verse-sequence-aux  (cons (get-verse book chapter at) lst)
+			       book chapter (1+ at) end)))
+
+;is text a map or a symbol? change title to index1-count
+(define (books-in-text text)
+  (books-in-text-aux text 0))
+
+(define (books-in-text-aux text count)
+  (if (text-ref text (index count 0 0))
+      (books-in-text-aux text (1+ count))
+      count))
+
+(define (verses-in-chapter book chapter)
+  (verses-in-chapter-aux book chapter 1))
+
+(define (verses-in-chapter-aux book chapter verse)
+  (if (bible-ref (list book chapter verse))
+      (verses-in-chapter-aux book chapter (1+ verse))
+      (- verse 2))) ;I don't understand why it's two over. it counts the return which makes sense,
+                    ;but why does it count the #f as one? won't work generally unless every text
+                    ;has these extra lines, so try to eliminate these in the mapping. WATCH THIS 3-14
+
+(define (chapters-in-book book) 
+  (chapters-in-book-aux book 1))
+
+(define (chapters-in-book-aux book chapter)
+  (if (bible-ref (list book chapter 0))
+      (chapters-in-book-aux book (1+ chapter))
+      (1- chapter))) ;this makes sense that it doesn't count #f but does 
 
 ;===============================================================================
 ;===============================================================================
 ;POETRY formatting and processing
 ;===============================================================================
+;if text is too small for following indexing conditions, maybe set first or third as 0,
+;so a text could be made up of just verses. 
+
+;unconventional: for things like Milton maybe map it book/canto, line, sentence. 
 
 ;for things like Dante this might be canto, stanza, line. 
 ;(define (numbers->index lst)
@@ -363,6 +498,42 @@
 ;PROSE formatting and processing
 ;===============================================================================
 
+;put each line into a paragraph, then concatenate them all. Make sure to remove return values!
+(define (map-prose name filename)
+  (let ((table (make-table))
+	(chapters 0)
+	(paragraphs 0)
+	(paragraph '()))
+    (fold-lines-in-file 
+     filename
+     (lambda (line line-number)
+       (if (equal? 1 (string-size line))
+	   (push lst line)))
+       (table-set! table line-number line)
+       (if (empty? line)
+	   (println line-number line))
+       (1+ line-number)) 1)
+    (if (path-opened? name)
+	(set! *open-paths* (cons (cons name table) (delete-assoc name *open-paths*))) ;use replace here? 
+	(set! *open-paths* (cons (cons name table) *open-paths*))))
+
+    
+
+
+
+;map things by chapter, paragraph, sentence. this parallels bible mapping. 
+
+;chapters are formatted differently in some texts. Ulysses uses -- I --
+;most use CHAPTER x which is easy. So maybe I need use converting to roman numerals
+;so that I can use the proper chapter key. 
+
+;since the paragraph is the unit rather than the line, I need a way to count
+;them. For justified text I'll count the number of characters in each line, and
+;whenever a break occurs in a line with less than that length, then it's a paragraph.
+;the other way texts are formatted is with line breaks between paragraphs. 
+
+;once you have a paragraph you can break it up by sentences. for dialogue
+;I'll need to look right before the final quotation mark. 
 
 ;===============================================================================
 ;===============================================================================
@@ -510,3 +681,6 @@
 
 ;Map the paths here
 (map-paths)
+
+;this won't be initialized properyly unless bible is mapped before hand, and that's too inefficient. 
+(define *bible* (access-file 'bible))
