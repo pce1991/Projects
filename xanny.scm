@@ -1,4 +1,3 @@
-;XANNY
 
 ;write my own format function. So I guess it'll take something like 
 ;"hello ~S" and would create a println with "hello " then substitute the
@@ -12,6 +11,9 @@
 
 ;WHY are all macros so iffy on this? sometimes push works, sometimes it says its an unbound variable.
 ;dotimes was working earlier, but not anymore... 
+
+(define (void? n)
+  (equal? n #!void))
 
 (define (nthcdr n lst)
   (list-tail lst n)) 
@@ -34,6 +36,7 @@
 (define-macro (dec n)
   `(set! n (- n 1)))
 
+;change this to remove since it isn't destructive. 
 (define (delete item list)
   (cond
    ((equal? item (car list)) (cdr list))
@@ -72,7 +75,7 @@
         (list-set! (cdr list) (- k 1) val)))
 
 (define (newline? ch)
-  (if (or (equal? ch #\newline) (equal? ch #\return))
+  (if (or (equal? ch #\newline) (equal? ch #\return) (equal? ch "\r"))
       #t
       #f))
 
@@ -132,7 +135,7 @@
 (define *contractions* '(("'m" . "am") ("'ve" . "have") ("'s" . "is") ("'ll" . "will")
 			 ("'re" . "are")))
 
-(define (expand-contractions word)
+(define (expand-contraction word)
   "Takes in a single word and expands its form."
   (string-append  
    (substring word 0 (find-char #\' word)) " "
@@ -184,13 +187,20 @@
   (trim-spaces-aux (string->list string)))
 
 (define (trim-spaces-aux lst)
-  (if (space? (car lst))
-      (trim-spaces-aux (cdr lst))
-      (if (space? (last lst))
-	  (trim-spaces-aux (string->list (trim-string (list->string lst))))
-	  (list->string lst))))
+  (if (pair? lst) ;make sure that there will be a car. 
+      (if (space? (car lst))
+	  (trim-spaces-aux (cdr lst))
+	  (if (space? (last lst))
+	      (trim-spaces-aux (string->list (trim-string (list->string lst))))
+	      (list->string lst)))))
 
-;TODO: finish this and generalize get-sentence to get nth-sentence. 
+;TODO 
+(define (trim-returns string)
+  (let ((lst (string->list string)))
+    (if (newline? (last lst))
+	(trim-string string)
+	string)))
+
 (define (count-sentences string)
   (+ (char-count #\. string) (char-count #\? string)
      (char-count #\! string)))
@@ -200,19 +210,33 @@
 (define (get-sentence string)
   "returns a substring that starts at the beginning of the string until sentence's end."
   (let ((end (find-punctuation string)))
-    (trim-spaces (substring string 0 (1+ end))))) ;1+ since find-char will return at what place that char is, and we want it included. 
+    (if (not (void? end))
+	(trim-spaces (substring string 0 (1+ end)))))) ;1+ since find-char will return at what place that char is, and we want it included. 
 
 (define (nth-sentence n string)
   (nth-sentence-aux n string 0))
 
 (define (nth-sentence-aux n string position)
-  (println string)
   (if (eq? n position)
       (get-sentence string)
       (nth-sentence-aux n 
-			(list->string (nthcdr (1+ (find-punctuation string)) (string->list string)))
+			(list->string (nthcdr (1+ (find-punctuation string)) 
+					      (string->list string)))
 				(1+ position))))
 
+;write something that'll get phrases, so it'll separate things by comma, dashes, parens, colons, etcetera.
+;it'd be more useful if this could be expanded to find asides. 
+
+;write something that'll take a whole string. then break it up into a list of its individual sentences. 
+(define (list-sentences string)
+  (list-sentences-aux string '() 0 (count-sentences string)))
+
+(define (list-sentences-aux string lst count max)
+  (if (eq? count max)
+      (reverse lst)
+      (list-sentences-aux string (cons (nth-sentence count string) lst)
+			(1+ count) max)))
+      
 ;this is pretty dumb, it returns a string, not a char. 
 (define (last-char string)
   (let ((str (string->list string)))
@@ -233,7 +257,8 @@
 (define (find-punctuation word)
   (cond ((find-char #\. word) (find-char #\. word))
 	((find-char #\? word) (find-char #\? word))
-	((find-char #\! word) (find-char #\! word))))
+	((find-char #\! word) (find-char #\! word))
+	(else -1)))
 
 (define (list-index element lst)
   (list-index-aux element lst 0))
@@ -280,7 +305,11 @@
   "count instances of a char in a string."
   (element-count ch (string->list string)))
 
+(define (string->char string)
+  (car (string->list string)))
 
+(define (string-begins? string beginning)
+  (equal? beginning (nth-word 0 string)))
 
 ;===============================================================================
 ;===============================================================================
@@ -380,9 +409,10 @@
   (if (null? books)
       #f
       (if (exact-subset? (string->list (car books)) line) ;load-bible quits here a lot, and I don't know why. too slow? 
-	  #t
 	  (check-book line (cdr books)))))
 
+;maybe make this more discerning. It doesn't just need chapter, but it can't have BOOK and
+;CHAPTER in same part. 
 (define (chapter? line)
   (exact-subset? (string->list "CHAPTER") (string->list line)))
 
@@ -403,7 +433,6 @@
 ;     "~/Projects/xanadu/the-holy-bible/genesis.txt"
      "~/Projects/xanadu/the-holy-bible/kjv-text-only.txt"
      (lambda (line number)
-;       (println book " " chapter " " verse)
        (cond ((book? line) (set! book (1+ book))
 	      (set! chapter 0);resets chapter when book changes. 
 	      (set! verse 0)) ;resets verse when book changes. 
@@ -499,28 +528,54 @@
 ;PROSE formatting and processing
 ;===============================================================================
 
+(define *prose-section-markers* '("CHAPTER" "BOOK" "EPILOGUE" "PROLOGUE" "PRELUDE"))
+
+(define (section? string identifier)
+  (string-begins? string identifier)) ;this might be a problem: I can imagine sections not beginning with identifier. 
+;  (exact-subset? (string->list identifier) (string->list string)))
+
+;give this a section identifier or something so it knows what to look for. 
+(define (prose-section? string identifier)
+  (and (section? string identifier) ;and each other section marker isn't there. 
+       (not (member #t (map (lambda (marker) (exact-subset? (string->list marker) (string->list string))) ;how to break down list
+	    (delete identifier *prose-section-markers*))))))
+;this still has problems of filtering out things that might contain CHAPTER, but is not a marker. maybe it has to begin
+;with chapter. also, what about other sections like prelude, epilogue, EXTRACTS in the case of moby-dick. 
+
 ;put each line into a paragraph, then concatenate them all. Make sure to remove return values!
-(define (map-prose name filename)
+;I need to find a way to extract a new line out of a line. possibly characters are \n and \r
+;Here's a problem: neseted chapters, or rather chapters that contain other chapters like in
+;moby-dick. chapter 31 thinks that there are 18 other chapters cause of all the BOOK 1. stuff.
+(define (map-prose name filename chapter-marker)
   (let ((table (make-table))
-	(chapters 0)
+	(chapter 0)
 	(paragraphs 0)
 	(paragraph '()))
     (fold-lines-in-file 
      filename
      (lambda (line line-number)
-       (if (equal? 1 (string-size line))
-	   (push lst line)))
-       (table-set! table line-number line)
-       (if (empty? line)
-	   (println line-number line))
+       (if (newline? line)
+	   (begin  
+	     ;(println chapter " "paragraphs "    " (reverse paragraph)) ; (reverse paragraph))
+	     (let ((sentence 0)) 
+	       (for-each (lambda (sent) 
+			   (println chapter " " paragraphs " " sentence)
+			   (table-set! table (list chapter paragraphs sentence) sent)
+			   (set! sentence (1+ sentence)))
+			 (list-sentences (apply string-append (reverse paragraph))))) 
+;makes all the lines into one long string, then breaks it up into a list of those sentences. 
+	     (if (not (null? paragraph))
+		 (set! paragraphs (1+ paragraphs)))
+	     (set! paragraph '()))
+	   (set! paragraph (cons (string-append (trim-returns line) " ") paragraph)))
+       (if (prose-section? line chapter-marker)
+	   (begin 
+	     (set! chapter (1+ chapter))
+	     (set! paragraphs 0))) ;also reset the paragraph marker here. 
        (1+ line-number)) 1)
     (if (path-opened? name)
 	(set! *open-paths* (cons (cons name table) (delete-assoc name *open-paths*))) ;use replace here? 
-	(set! *open-paths* (cons (cons name table) *open-paths*))))
-
-    
-
-
+	(set! *open-paths* (cons (cons name table) *open-paths*)))))
 
 ;map things by chapter, paragraph, sentence. this parallels bible mapping. 
 
@@ -536,6 +591,19 @@
 ;once you have a paragraph you can break it up by sentences. for dialogue
 ;I'll need to look right before the final quotation mark. 
 
+;TEXT RETRIEVAL, this applies for all texts now. Maybe adapt them so it can take in a table, or a file-name and file-access it. 
+
+(define (get-third text first second third)
+  (table-ref text (list first second third)))
+
+(define (get-third-seq text first second start end)
+  (reverse (get-third-seq-aux '() text first second start end)))
+
+(define (get-third-seq-aux lst text first second at end)
+  (if (equal? at end)
+      (cons (get-third text first second at) lst)
+      (get-third-seq-aux (cons (get-third text first second at) lst) text
+			 first second (1+ at) end)))
 ;===============================================================================
 ;===============================================================================
 ;WRITING to files
@@ -543,6 +611,9 @@
 ;(define (write-to-file filename)
  ; (with-output-to-file filename
    
+;COPY a file, read from one file, and for each line write it into a new file. 
+(define (copy-text text copy-to)
+  '())
 
 ;===============================================================================
 ;===============================================================================
