@@ -199,6 +199,7 @@
 
 ;I think this is being overzealous and getting rid of things like #\" and such. it's this
 (define (trim-returns string)
+  (println string)
   (let ((lst (string->list string)))
     (if (newline? (last lst))
 	(trim-string string)
@@ -460,6 +461,7 @@
   (if (null? books)
       #f
       (if (exact-subset? (string->list (car books)) line) ;load-bible quits here a lot, and I don't know why. too slow? 
+	  #t
 	  (check-book line (cdr books)))))
 
 ;maybe make this more discerning. It doesn't just need chapter, but it can't have BOOK and
@@ -473,7 +475,8 @@
 ;I tried writing this using an index list instead of book, chap, vers, but it mapped
 ;everything to the final value of index for some weird reason. 
 ;way too slow. but I'm not sure why, 'cause fold-lines is recursive?
-;I notice it lags quite a bit at a few parts.  
+;I notice it lags quite a bit at a few parts. 
+;it went really fast when it only indexes by chapter... why exponentionally? 
 (define (load-bible)
   "Maps the bible with a list containing the index as the key to each verse."
   (let ((table (make-table))
@@ -484,6 +487,7 @@
 ;     "~/Projects/xanadu/the-holy-bible/genesis.txt"
      "~/Projects/xanadu/the-holy-bible/kjv-text-only.txt"
      (lambda (line number)
+      ; (println book " " chapter " " verse)
        (cond ((book? line) (set! book (1+ book))
 	      (set! chapter 0);resets chapter when book changes. 
 	      (set! verse 0)) ;resets verse when book changes. 
@@ -492,7 +496,9 @@
 	      (set! verse 0))) ;resets verse when chapter changes.
        (if (and (not (book? line)) (not (chapter? line)))
 	   (set! verse (1+ verse)))
-       (table-set! table (list book chapter verse) line)) 1) 
+ ;      (if (not (newline? line))
+	   (table-set! table (list book chapter verse) line)); (trim-returns line)))) ;why!?!
+     1) 
     (set! *open-paths* (cons (cons 'bible table) *open-paths*))))
 ;need to include the same fail-safe here of overwriting itself in open-paths if its already there
 
@@ -879,8 +885,8 @@
  (lambda (line line-num) 
    (println line-num "     " line) (1+ line-num)) 1)
 
-(define *dictionary* "~/Projects/DICTIONARIES/WordNet-3.0/dict/word-list.txt")
-(load-path 'dictionary *dictionary*) 
+(define *dictionary* 
+  (load-path 'dictionary "~/Projects/DICTIONARIES/WordNet-3.0/dict/word-list.txt"))
 
 ;Map the paths here
 (map-paths)
