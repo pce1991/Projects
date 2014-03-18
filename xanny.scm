@@ -1,3 +1,5 @@
+;XANADU
+;USE TRANSCLUSIONS. Xanalogical structure. 
 
 ;write my own format function. So I guess it'll take something like 
 ;"hello ~S" and would create a println with "hello " then substitute the
@@ -147,6 +149,7 @@
 (define (nth-word n string)
   (nth-word-aux n (string->list string) 0 '()))
 
+;can cause some problems if it get a space as a word, it'll return an empty string. 
 (define (nth-word-aux n ch-lst place word)
   (if (null? ch-lst)
       #f
@@ -194,7 +197,7 @@
 	      (trim-spaces-aux (string->list (trim-string (list->string lst))))
 	      (list->string lst)))))
 
-;TODO 
+;I think this is being overzealous and getting rid of things like #\" and such. it's this
 (define (trim-returns string)
   (let ((lst (string->list string)))
     (if (newline? (last lst))
@@ -211,8 +214,13 @@
   "returns a substring that starts at the beginning of the string until sentence's end."
   (let ((end (find-punctuation string)))
     (if (not (void? end))
-	(trim-spaces (substring string 0 (1+ end)))))) ;1+ since find-char will return at what place that char is, and we want it included. 
+	(begin 
+	  (if (not (void? (find-other-punctuation (substring string end (string-length string)))))
+	      (set! end (1+ end)))
+	  (trim-spaces (substring string 0 (1+ end))))))) ;1+ since find-char will return at what place that char is, and we want it included. 
 
+;change this so that it it can take interjections as punctuation like Look! there they are.
+;also it doesn't account for a sentence ending "run." after the period.  
 (define (nth-sentence n string)
   (nth-sentence-aux n string 0))
 
@@ -254,11 +262,18 @@
   (let ((word (string->list word)))
     (list-index ch word)))
 
-(define (find-punctuation word)
-  (cond ((find-char #\. word) (find-char #\. word))
-	((find-char #\? word) (find-char #\? word))
-	((find-char #\! word) (find-char #\! word))
-	(else -1)))
+
+;this is ending punctuation. uh oh! this doesn't work right, it'll returns which it finds first.
+;I need it to return the lowest. 
+
+(define (find-punctuation string)
+  (get-least (filter number? 
+	  (list (find-char #\. string) (find-char #\! string) (find-char #\? string)))))
+
+;change this! use aif here. 
+(define (find-other-punctuation word)
+  (get-least (filter number? (list (find-char #\, word) (find-char #\" word)
+				   (find-char #\) word) (find-char #\( word)))))
 
 (define (list-index element lst)
   (list-index-aux element lst 0))
@@ -310,6 +325,42 @@
 
 (define (string-begins? string beginning)
   (equal? beginning (nth-word 0 string)))
+
+(define (before-in-alphabet? str1 str2)
+  (before? (first-char str1) (first-char str2) *alphabet*))
+
+;allow this to take in infinite arguments for a much more useful function. 
+(define (lower-letter str1 str2)
+  (if (before-in-alphabet? str1 str2)
+      str1
+      str2))
+
+(define (get-least lst)
+  (if (pair? lst)
+      (get-lowest-aux lst (car lst)))) ;won't work with negatives since lowest starts at 0. 
+
+(define (get-lowest-aux lst lowest)
+  (if (null? lst)
+      lowest
+      (if (< (car lst) lowest)
+	  (get-lowest-aux (cdr lst) (car lst))
+	  (get-lowest-aux (cdr lst) lowest))))
+
+(define (get-greatest lst)
+  (get-greatest-aux lst (car lst))) ;won't work with negatives since lowest starts at 0. 
+
+(define (get-greatest-aux lst greatest)
+  (if (null? lst)
+      greatest
+      (if (> (car lst) greatest)
+	  (get-greatest-aux (cdr lst) (car lst))
+	  (get-greatest-aux (cdr lst) greatest))))
+
+(define (filter pred lst)
+  (cond ((null? lst) '())
+        ((pred (car lst))
+         (cons (car lst) (my-filter pred (cdr lst))))
+        (else (my-filter pred (cdr lst)))))
 
 ;===============================================================================
 ;===============================================================================
@@ -386,8 +437,8 @@
 ;TEXT retrieval and access.
 ;===============================================================================
 ;make this optional, so that for some files you won't need to specify a book. 
-(define (text-ref text-name index1 index2 index3)
-  (table-ref (access-file text-name) (list index1 index2 index3) #f))
+(define (text-ref text index1 index2 index3) ;text is a table, will mess up bible stuff!
+  (table-ref text (list index1 index2 index3) #f)) 
 
 ;bring over the bible functions like get-verse and such. make more general. 
 
@@ -508,7 +559,7 @@
 (define (chapters-in-book-aux book chapter)
   (if (bible-ref (list book chapter 0))
       (chapters-in-book-aux book (1+ chapter))
-      (1- chapter))) ;this makes sense that it doesn't count #f but does 
+      (1- chapter))) ;this makes sense that it doesn't count #f 
 
 ;===============================================================================
 ;===============================================================================
@@ -523,6 +574,35 @@
 ;(define (numbers->index lst)
  ; (map number->string lst)
 
+;the sentence isn't a fundamental unit of poetry the way it is for prose, maybe why
+;I'm less comfortable with it. It'd be nice to also have access them. 
+(define (map-poetry name filename section-marker)
+  (let ((table (make-table))
+	(section 0) ;book/canto
+	(segment 0)
+	(line-number 0)) ;stanza/paragraph. these follow an empty line. 
+    (fold-lines-in-file
+     filename
+     (lambda (line line-num)
+      ; (println section " " segment " " line-number)
+       (if (prose-section? (trim-spaces line) section-marker)
+	   (begin
+	     (set! section (1+ section))
+	     (set! segment 0)
+	     (set! line-number 0)))
+       (if (newline? line)
+	   (begin
+	     (set! segment (1+ segment)) ;does segment reset line-number? if it does you should still be able to access things by lline number. this method is less useful for say Dante, because each segment is always 6 lines, so its more desireable to get things by line number. 
+	     (set! line-number 0))
+	   (begin 
+	     (table-set! table (list section segment line-number) (trim-spaces (trim-returns line)))
+	     (set! line-number (1+ line-number))))
+       (1+ line-num)) 1)
+    (if (path-opened? name)
+	(set! *open-paths* (cons (cons name table) (delete-assoc name *open-paths*))) ;use replace here? 
+	(set! *open-paths* (cons (cons name table) *open-paths*)))))
+
+
 ;===============================================================================
 ;===============================================================================
 ;PROSE formatting and processing
@@ -531,7 +611,7 @@
 (define *prose-section-markers* '("CHAPTER" "BOOK" "EPILOGUE" "PROLOGUE" "PRELUDE"))
 
 (define (section? string identifier)
-  (string-begins? string identifier)) ;this might be a problem: I can imagine sections not beginning with identifier. 
+  (string-begins? string identifier)) ;this might be a problem: I can imagine sections not beginning with identifier, especially if its endented or something like that. 
 ;  (exact-subset? (string->list identifier) (string->list string)))
 
 ;give this a section identifier or something so it knows what to look for. 
@@ -554,10 +634,11 @@
     (fold-lines-in-file 
      filename
      (lambda (line line-number)
+;       (println line)
        (if (newline? line)
 	   (begin  
 	     ;(println chapter " "paragraphs "    " (reverse paragraph)) ; (reverse paragraph))
-	     (let ((sentence 0)) 
+	     (let ((sentence 0)) ;its 0 indexing right now, which I'm not sure about.  
 	       (for-each (lambda (sent) 
 			   (println chapter " " paragraphs " " sentence)
 			   (table-set! table (list chapter paragraphs sentence) sent)
@@ -568,7 +649,7 @@
 		 (set! paragraphs (1+ paragraphs)))
 	     (set! paragraph '()))
 	   (set! paragraph (cons (string-append (trim-returns line) " ") paragraph)))
-       (if (prose-section? line chapter-marker)
+       (if (prose-section? (trim-spaces line) chapter-marker) ;trim lines so CHAPTER is at beginning
 	   (begin 
 	     (set! chapter (1+ chapter))
 	     (set! paragraphs 0))) ;also reset the paragraph marker here. 
@@ -594,16 +675,65 @@
 ;TEXT RETRIEVAL, this applies for all texts now. Maybe adapt them so it can take in a table, or a file-name and file-access it. 
 
 (define (get-third text first second third)
-  (table-ref text (list first second third)))
+  (text-ref text first second third))
 
 (define (get-third-seq text first second start end)
   (reverse (get-third-seq-aux '() text first second start end)))
 
+;include an error message if sequence goes over the end. 
 (define (get-third-seq-aux lst text first second at end)
   (if (equal? at end)
       (cons (get-third text first second at) lst)
       (get-third-seq-aux (cons (get-third text first second at) lst) text
 			 first second (1+ at) end)))
+
+(define (get-second text first second)
+  (get-third-seq text first second 0 (1- (thirds-in-second text first second))))
+
+(define (get-second-seq text first start end)
+  (reverse (get-second-seq-aux '() text first start end)))
+
+(define (get-second-seq-aux lst text first at end)
+  (if (equal? at end)
+      (cons (get-second text first at) lst)
+      (get-second-seq-aux (cons (get-second text first at) lst) text first (1+ at) end)))
+
+;getting some voids here! investigate why!
+(define (get-first text first)
+  (get-first-aux text first 0))
+
+(define (get-first-aux text first paragraphs)
+  (get-second-seq text first 0 (seconds-in-first text first)))
+
+(define (first-count text)
+  "returns how many unique first indexes there are."
+  (first-count-aux text 1)) ;I can't start it at 0. maybe I should fix this. 
+
+;make sure this is right. might be off by 1 since count starts there... 
+(define (first-count-aux text count)
+  (if (text-ref text count 0 0)
+      (first-count-aux text (1+ count))
+      count))
+
+(define (seconds-in-first text first) 
+  (seconds-in-first-aux text first 0))
+
+(define (seconds-in-first-aux text first count)
+  (if (text-ref text first count 0)
+      (seconds-in-first-aux text first (1+ count))
+      (1- count))) ;this is so it doesn't count CHAPTER as a pargraph. 
+
+(define (thirds-in-second text first second)
+  "returns how many entries there are under the second index." 
+  (thirds-in-second-aux text first second 0))
+
+(define (thirds-in-second-aux text first second count)
+  (if (and (text-ref text first second count) (not (void? (text-ref text first second count))))
+      (thirds-in-second-aux text first second (1+ count))
+      count))
+
+
+
 ;===============================================================================
 ;===============================================================================
 ;WRITING to files
@@ -612,8 +742,8 @@
  ; (with-output-to-file filename
    
 ;COPY a file, read from one file, and for each line write it into a new file. 
-(define (copy-text text copy-to)
-  '())
+;(define (copy-text text copy-to)
+ ; '())
 
 ;===============================================================================
 ;===============================================================================
@@ -705,15 +835,6 @@
 (define (word-type entry)
   (cdr (assoc (nth-word 1 entry) *word-types*)))
   
-(define (before-in-alphabet? str1 str2)
-  (before? (first-char str1) (first-char str2) *alphabet*))
-
-;allow this to take in infinite arguments for a much more useful function. 
-(define (lower-letter str1 str2)
-  (if (before-in-alphabet? str1 str2)
-      str1
-      str2))
-
 (define (find-word word)
   (let ((dict (access-file 'dictionary)))
     (find-word-aux word dict 1 (table-length dict))))
@@ -727,7 +848,6 @@
 	  (table-ref dict start)
 	  (find-word-aux word dict (1+ start) length))))
     
-
 ;===============================================================================
 ;===============================================================================
 ;PARSING/NLP
@@ -736,6 +856,17 @@
 ;parse a sentence, then loop up each word. I guess I don't actually need to parse
 ;the sentence, but it might be more efficient that way if I only want to look up
 ;certain words like a verb or proper noun. 
+
+;===============================================================================
+;===============================================================================
+;USER
+;===============================================================================
+;write a work-with-file function which lets you do things like get-third-seq and
+;such without having to specify a file. you can switch at anytime between which
+;text you're currently working with from a list of loaded files. if there's a 
+;connection between two files (either loaded or not, depending on the user's 
+;preference), the file will say it's pointing to '(1 1 1) in the Bible. if you
+;swich to that index, then the file you're working in is the Bible. 
 
 ;===============================================================================
 ;===============================================================================
@@ -753,6 +884,3 @@
 
 ;Map the paths here
 (map-paths)
-
-;this won't be initialized properyly unless bible is mapped before hand, and that's too inefficient. 
-(define *bible* (access-file 'bible))
