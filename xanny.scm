@@ -363,6 +363,62 @@
          (cons (car lst) (my-filter pred (cdr lst))))
         (else (my-filter pred (cdr lst)))))
 
+;loop through each word in a sentence, and perform a procedure on each word. 
+(define (sentence-loop proc string)
+  "allows you to perform a proceadure on each word in a string.
+procedure must produce a side effect of some kind, can't just return a value."
+  (let loop ((i 0))
+    (apply proc (list (nth-word i string))) 
+    (if (< i (1- (word-count string)))
+	(loop (1+ i)))))
+
+;update this so it isn't case sensitive. 
+(define (sentence-contains word string)
+  (let ((true? #f))
+    (sentence-loop (lambda (w) (if (equal? word w) (set! true? #t))) string)
+    true?))
+
+;=========================================
+;Patern matching
+;=========================================
+;use this pattern matching stuff in finding book/chapter names. 
+(define (var? x)
+  (if (symbol? x)
+      (equal? (last-char (symbol->string x)) #\?)
+      #f))
+
+(define (match pat inp)
+  (match-aux pat inp '((t t))))
+
+;why's this put so much stuff in? 
+(define (match-aux pat inp bindings)
+  (and bindings 
+       (if (pair? pat) ;interior node? 
+	   (and (pair? inp)
+		(match-aux (cdr pat) (cdr inp) 
+			   (match-aux (car pat) (car inp) bindings)))
+	   (if (var? pat) ;is leaf a variable? 
+	       (let ((binding (assoc pat bindings)))
+		 (if binding 
+		     (and (equal? inp (cadr binding))
+			  bindings)
+		     (cons (list pat inp) bindings)))
+	       (and (eqv? pat inp) bindings)) )))
+
+(define (sublis alist tree)
+  (if (pair? tree)
+      (cons (sublis alist (car tree))
+            (sublis alist (cdr tree)))
+      (if (assoc tree alist)
+          (cadr (assoc tree alist))
+          tree)))
+
+;not working!
+(define (transform pattern-pair input)
+  (let ((bindings '()))
+    (if (set! bindings (match (car pattern-pair) input))
+	(sublis bindings
+		(cadr pattern-pair))) ))
 ;===============================================================================
 ;===============================================================================
 ;PATHS
@@ -862,6 +918,8 @@
 ;parse a sentence, then loop up each word. I guess I don't actually need to parse
 ;the sentence, but it might be more efficient that way if I only want to look up
 ;certain words like a verb or proper noun. 
+
+
 
 ;===============================================================================
 ;===============================================================================
