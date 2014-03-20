@@ -9,10 +9,13 @@
 ;this will need an auxiliary that'll go through the string and find formatting
 
 ;brings in some novak utility code like while, dolist, dotimes. 
-(load "~/Projects/initdr-novak.scm")
+;(load "~/Projects/initdr-novak.scm")
 
 ;WHY are all macros so iffy on this? sometimes push works, sometimes it says its an unbound variable.
 ;dotimes was working earlier, but not anymore... 
+
+(define (1+ n) (+ n 1))
+(define (1- n) (- n 1))			  
 
 (define (void? n)
   (equal? n #!void))
@@ -24,19 +27,20 @@
   (list-ref lst n))
 
 (define (last lst)
-  (car (nthcdr (1- (length lst)) lst)))
+  (if (not (null? lst))
+      (car (nthcdr (1- (length lst)) lst))))
 
-(define-macro (push var #!optional val)
+(define-macro (push var val)
   `(set! ,var (cons ,val ,var)))
 
 (define-macro (pop var)
   `(set! ,var (cdr  ,var)))
 
 (define-macro (inc n)
-  `(set! n (+ n 1)))
+  `(set! ,n (+ ,n 1)))
 
 (define-macro (dec n)
-  `(set! n (- n 1)))
+  `(set! ,n (- ,n 1)))
 
 ;change this to remove since it isn't destructive. 
 (define (delete item list)
@@ -146,10 +150,12 @@
 (define (nth-char n string)
   (nth n (string->list string)))
 
+;trouble where it'll count "  " as a word since it's preceded by a space. 
 (define (nth-word n string)
   (nth-word-aux n (string->list string) 0 '()))
 
-;can cause some problems if it get a space as a word, it'll return an empty string. 
+;can cause some problems if it get a space as a word, it'll return an empty string.
+;write a version that doesn't trim punctuation.  
 (define (nth-word-aux n ch-lst place word)
   (if (null? ch-lst)
       #f
@@ -164,6 +170,36 @@
 	    (if (and (null? (cdr ch-lst)) (eq? n place))
 		(trim-punctuation (list->string (reverse word)))
 		(nth-word-aux n (cdr ch-lst) place word))))))
+
+(define (nth-word-w/punc n string)
+  "nth-word that preserves punctuation. might be more useful in some instances."
+  (nth-word-w/punc-aux n (string->list string) 0 '()))
+
+(define (nth-word-w/punc-aux n ch-lst place word)
+  (if (null? ch-lst)
+      #f
+      (begin
+	(set! word (cons (car ch-lst) word))
+	(if (space? (car ch-lst))
+	    (begin
+	      (set! place (+ 1 place))
+	      (if (eq? n (1- place))
+		  (trim-spaces (list->string (reverse word)))
+		  (nth-word-w/punc-aux n (cdr ch-lst) place '())))
+	    (if (and (null? (cdr ch-lst)) (eq? n place))
+		(trim-spaces (list->string (reverse word)))
+		(nth-word-w/punc-aux n (cdr ch-lst) place word))))))
+
+(define (list-string-w/punc string)
+  "list-string that preserve punctuation, so its more accurate in preserving the string
+state. This is what'll be used in pattern matching since it'll keep x? in a string."
+  (list-string-w/punc-aux string 0 '()))
+
+(define (list-string-w/punc-aux string place lst)
+  (if (equal? place (word-count string))
+      (reverse lst)
+      (list-string-w/punc-aux string (1+ place) (cons (nth-word-w/punc place string) lst))))
+
 
 ;define equal-or which tests one thing against a bunch of stuff. 
 
@@ -187,7 +223,9 @@
 	(trim-punctuation (trim-string string)))))
 
 (define (trim-spaces string)
-  (trim-spaces-aux (string->list string)))
+  (if (or (null? (string->list string)) (null? (cdr (string->list string))))
+      string
+      (trim-spaces-aux (string->list string))))
 
 (define (trim-spaces-aux lst)
   (if (pair? lst) ;make sure that there will be a car. 
@@ -199,7 +237,6 @@
 
 ;I think this is being overzealous and getting rid of things like #\" and such. it's this
 (define (trim-returns string)
-  (println string)
   (let ((lst (string->list string)))
     (if (newline? (last lst))
 	(trim-string string)
@@ -299,7 +336,7 @@
 
 ;this is kind of error prone though 'cause it would count indentation as 4 words... 
 (define (word-count string)
-  (if (not (empty? string))
+  (if (and (not (empty? string)) (not (void? string)))
       (let ((count 0))
 	(for-each (lambda (ch) (if (space? ch) (set! count (+ 1 count))))
 		  (string->list string))
@@ -384,7 +421,7 @@ procedure must produce a side effect of some kind, can't just return a value."
 ;use this pattern matching stuff in finding book/chapter names. 
 (define (var? x)
   (if (symbol? x)
-      (equal? (last-char (symbol->string x)) #\?)
+      (equal? (last-char (symbol->string x)) #\?) ;last char, maybe use first for convention. 
       #f))
 
 (define (match pat inp)
@@ -409,7 +446,7 @@ procedure must produce a side effect of some kind, can't just return a value."
   (if (pair? tree)
       (cons (sublis alist (car tree))
             (sublis alist (cdr tree)))
-      (if (assoc tree alist)
+      (if (assoc tree alist) 
           (cadr (assoc tree alist))
           tree)))
 
@@ -417,8 +454,17 @@ procedure must produce a side effect of some kind, can't just return a value."
 (define (transform pattern-pair input)
   (let ((bindings '()))
     (if (set! bindings (match (car pattern-pair) input))
-	(sublis bindings
-		(cadr pattern-pair))) ))
+;	(begin 
+;	  (set! bindings (match (car pattern-pair) input))
+	  (sublis bindings
+		  (cadr pattern-pair))) ))
+
+;========================================
+;MAP REDUCE
+;========================================
+;(define (mapreduce mapfun reducefun lst)
+ ; (let (db keylist)
+
 ;===============================================================================
 ;===============================================================================
 ;PATHS
@@ -631,14 +677,31 @@ procedure must produce a side effect of some kind, can't just return a value."
 ;so a text could be made up of just verses. 
 
 ;unconventional: for things like Milton maybe map it book/canto, line, sentence. 
-
 ;for things like Dante this might be canto, stanza, line. 
-;(define (numbers->index lst)
- ; (map number->string lst)
+
+(define (string->symbol-list string)
+  (if (not (void? (list-string-w/punc string)))
+      (map string->symbol (list-string-w/punc string))))
+
+;section-match seems to slow it down dramatically... 
+(define (section-match? pattern line)
+  "works like match but it takes in strings instead of symbols."
+  (match (string->symbol-list pattern) (string->symbol-list line)))
+
+;ideally I'd have a way to know the justification of the text, and if a line is further to the
+;right than the others, but for now I'll just measure it by 4 spaces, many poems are already
+;spaced over twice, and then another two if indented. 
+(define (indented? string)
+  (let ((string (string->list string)))
+    (exact-subset? (string->list "    ") string)))
 
 ;the sentence isn't a fundamental unit of poetry the way it is for prose, maybe why
 ;I'm less comfortable with it. It'd be nice to also have access them. 
-(define (map-poetry name filename section-marker)
+;let them specify how many indexes they want? faerie queene should be 4 indexes, maybe dante too. 
+;some things aren't returned between paragraphs, but feature an indentation. Account for this somehow
+;sometimes it'll dwell on one line for a long time it seems. 
+;also have the user add a segment-marker-procedure such as newline? or indented? 
+(define (map-poetry name filename section-marker segment-procedure)
   (let ((table (make-table))
 	(section 0) ;book/canto
 	(segment 0)
@@ -646,13 +709,16 @@ procedure must produce a side effect of some kind, can't just return a value."
     (fold-lines-in-file
      filename
      (lambda (line line-num)
-      ; (println section " " segment " " line-number)
-       (if (prose-section? (trim-spaces line) section-marker)
+      ; (println line)
+      ;(println section-marker " " (section-match? section-marker (trim-returns (trim-spaces line))))
+      (println section " " segment " " line-number)
+       (if ;(prose-section? (trim-spaces line) section-marker)
+	(section-match? section-marker (trim-returns (trim-spaces line)))
 	   (begin
 	     (set! section (1+ section))
 	     (set! segment 0)
 	     (set! line-number 0)))
-       (if (newline? line)
+       (if (segment-procedure line)
 	   (begin
 	     (set! segment (1+ segment)) ;does segment reset line-number? if it does you should still be able to access things by lline number. this method is less useful for say Dante, because each segment is always 6 lines, so its more desireable to get things by line number. 
 	     (set! line-number 0))
@@ -688,6 +754,7 @@ procedure must produce a side effect of some kind, can't just return a value."
 ;I need to find a way to extract a new line out of a line. possibly characters are \n and \r
 ;Here's a problem: neseted chapters, or rather chapters that contain other chapters like in
 ;moby-dick. chapter 31 thinks that there are 18 other chapters cause of all the BOOK 1. stuff.
+;chapter marker fails in delete when it's lowercase. why? 
 (define (map-prose name filename chapter-marker)
   (let ((table (make-table))
 	(chapter 0)
@@ -749,6 +816,7 @@ procedure must produce a side effect of some kind, can't just return a value."
       (get-third-seq-aux (cons (get-third text first second at) lst) text
 			 first second (1+ at) end)))
 
+;might be some problems here if second doesn't exist it seems. 
 (define (get-second text first second)
   (get-third-seq text first second 0 (1- (thirds-in-second text first second))))
 
