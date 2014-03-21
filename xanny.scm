@@ -255,6 +255,7 @@ state. This is what'll be used in pattern matching since it'll keep x? in a stri
 (define (char->string char)
   (if (not (void? char))
       (list->string (list char))))
+
 ;not sure how this could even get called with a void value... 
 (define (char->number char)
   (if (not (void? char))
@@ -283,8 +284,11 @@ state. This is what'll be used in pattern matching since it'll keep x? in a stri
 
 ;change this so that it it can take interjections as punctuation like Look! there they are.
 ;also it doesn't account for a sentence ending "run." after the period.  
+;make it so if a string has no periods then it just returns the string. bad idea? 
 (define (nth-sentence n string)
-  (nth-sentence-aux n string 0))
+  (if (and (zero? (count-sentences string)) (eq? 0 n)) 
+      string
+      (nth-sentence-aux n string 0)))
 
 (define (nth-sentence-aux n string position)
   (if (eq? n position)
@@ -430,14 +434,15 @@ state. This is what'll be used in pattern matching since it'll keep x? in a stri
 	  (get-greatest-aux (cdr lst) (car lst))
 	  (get-greatest-aux (cdr lst) greatest))))
 
+;hmm, got an error here and now everything is broke. 
 (define (filter pred lst)
   (cond ((null? lst) '())
         ((pred (car lst))
-         (cons (car lst) (my-filter pred (cdr lst))))
-        (else (my-filter pred (cdr lst)))))
+         (cons (car lst) (filter pred (cdr lst))))
+        (else (filter pred (cdr lst)))))
 
 ;loop through each word in a sentence, and perform a procedure on each word. 
-(define (sentence-loop proc string)
+(define (sentence-loop string proc)
   "allows you to perform a proceadure on each word in a string.
 procedure must produce a side effect of some kind, can't just return a value."
   (let loop ((i 0))
@@ -454,6 +459,7 @@ procedure must produce a side effect of some kind, can't just return a value."
 ;count syllables for determing meter of poetry. 
 
 (define (sublist lst start end)
+  "gives you a sublist starting at nth element, consing on until it start = end."
   (sublist-aux lst start end '()))
 
 (define (sublist-aux lst start end lst2)
@@ -467,11 +473,13 @@ procedure must produce a side effect of some kind, can't just return a value."
 ;=========================================
 ;use this pattern matching stuff in finding book/chapter names. 
 (define (var? x)
+  "returns if a symbol matches the form for pattern matching variables."
   (if (symbol? x)
-      (equal? (last-char (symbol->string x)) #\?) ;last char, maybe use first for convention. 
+      (equal? (first-char (symbol->string x)) #\?) ;last char? maybe use first for convention. 
       #f))
 
 (define (match pat inp)
+  "returns a list of bindings if the pattern matches the input."
   (match-aux pat inp '((t t))))
 
 ;why's this put so much stuff in? 
@@ -490,6 +498,7 @@ procedure must produce a side effect of some kind, can't just return a value."
 	       (and (eqv? pat inp) bindings)) )))
 
 (define (sublis alist tree)
+  "performs substitutions in a list. uses (x y) instead of (x . y)" 
   (if (pair? tree)
       (cons (sublis alist (car tree))
             (sublis alist (cdr tree)))
@@ -744,6 +753,10 @@ procedure must produce a side effect of some kind, can't just return a value."
 	(exact-subset? (string->list "    ") (sublist string 0 4))
 	#f)))
 
+(define (indent string)
+  (let ((lst (string->list string)))
+    (list->string (append (string->list "    ") lst))))
+    
 ;technically this only checks justified from the left, won't tell you if its right justified,
 ;but that's not really necessary for english. 
 (define (justified? string)
@@ -754,6 +767,9 @@ procedure must produce a side effect of some kind, can't just return a value."
 	#f)))
 
 ;write a function that justifies text. 
+
+;use all-caps? as another method of checking a section. another possible candidate would be number? 
+;for plays though that would also denote segment markers since character names are in all-caps. 
 
 ;the sentence isn't a fundamental unit of poetry the way it is for prose, maybe why
 ;I'm less comfortable with it. It'd be nice to also have access them. 
@@ -805,16 +821,19 @@ procedure must produce a side effect of some kind, can't just return a value."
 	(set! *open-paths* (cons (cons name table) *open-paths*)))))
 ;on incrementing segment: ;does segment reset line-number? if it does you should still be able to access things by lline number. this method is less useful for say Dante, because each segment is always 6 lines, so its more desireable to get things by line number. 
 
-;===============================================================================
-;===============================================================================
+;===============================================================================================
+;===============================================================================================
 ;PLAY formatting
-;===============================================================================
+;===============================================================================================
 
+;(section-match? "ACT ?x Scene ?y" line) ;acts may sometimes be followed by a description of
+;of where they are taking place, and maybe some introductory stage direction. 
+;stage directions are justified. these may in the middle of a line, so how to index that? 
 
-;===============================================================================
-;===============================================================================
+;===============================================================================================
+;===============================================================================================
 ;PROSE formatting and processing
-;===============================================================================
+;===============================================================================================
 
 (define *prose-section-markers* '("CHAPTER" "BOOK" "EPILOGUE" "PROLOGUE" "PRELUDE"))
 
@@ -835,7 +854,8 @@ procedure must produce a side effect of some kind, can't just return a value."
 ;Here's a problem: neseted chapters, or rather chapters that contain other chapters like in
 ;moby-dick. chapter 31 thinks that there are 18 other chapters cause of all the BOOK 1. stuff.
 ;chapter marker fails in delete when it's lowercase. why? 
-(define (map-prose name filename chapter-marker)
+;so pattern matching fails if chapter-markers vary. 
+(define (map-prose name filename chapter-marker) ;include a titled? boolean? 
   (let ((table (make-table))
 	(chapter 0)
 	(paragraphs 0)
@@ -849,7 +869,7 @@ procedure must produce a side effect of some kind, can't just return a value."
 	     ;(println chapter " "paragraphs "    " (reverse paragraph)) ; (reverse paragraph))
 	     (let ((sentence 0)) ;its 0 indexing right now, which I'm not sure about.  
 	       (for-each (lambda (sent) 
-			   (println chapter " " paragraphs " " sentence)
+			   ;(println chapter " " paragraphs " " sentence)
 			   (table-set! table (list chapter paragraphs sentence) sent)
 			   (set! sentence (1+ sentence)))
 			 (list-sentences (apply string-append (reverse paragraph))))) 
@@ -858,7 +878,7 @@ procedure must produce a side effect of some kind, can't just return a value."
 		 (set! paragraphs (1+ paragraphs)))
 	     (set! paragraph '()))
 	   (set! paragraph (cons (string-append (trim-returns line) " ") paragraph)))
-       (if (prose-section? (trim-spaces line) chapter-marker) ;trim lines so CHAPTER is at beginning
+       (if (section-match? chapter-marker (trim-returns (trim-spaces (nth-sentence 0 line))))
 	   (begin 
 	     (set! chapter (1+ chapter))
 	     (set! paragraphs 0))) ;also reset the paragraph marker here. 
@@ -942,7 +962,34 @@ procedure must produce a side effect of some kind, can't just return a value."
       (thirds-in-second-aux text first second (1+ count))
       count))
 
+;write something that loops through the whole file and performs procedures on each entry. 
+;very un lispy to use so many loops. since I can get firsts maybe just loop through that, then
+;for each list in first, apply proc to it, actually use for-each instead. 
+(define (text-loop text proc)
+  (let ((firsts (first-count text)))
+    (let loop-firsts ((i 0))
+      (let loop-seconds ((j 0))
+	(let ((seconds (seconds-in-first text i)))
+	  (let loop-thirds ((k 0))
+	    (let ((thirds (thirds-in-second text i j)))
+	      (apply proc (list (get-third text i j k))) ;am I sometimes getting #f because i,j,or k are out of bounds? 
+	      (if (< k thirds)
+		  (loop-thirds (1+ k)))))
+	  (if (< j seconds)
+	      (loop-seconds (1+ j)))))
+      (if (< i firsts)
+	  (loop-firsts (1+ i))))))
 
+(define (append-paragraph-list lst)
+  "appends all the sentences in a pargraph with an extra space between them, and trims the last
+one off the end."
+  (trim-string (apply string-append 
+		      (map (lambda (str) (string-append str " ")) lst))))
+
+;need to concatenate " " at the end of each sentence. 
+(define (print-first text first)
+  (for-each (lambda (x) (println (indent (append-paragraph-list x))))
+	    (get-first text first)))
 
 ;===============================================================================
 ;===============================================================================
@@ -1039,6 +1086,13 @@ procedure must produce a side effect of some kind, can't just return a value."
 ;that into wordnet. 
 
 (define *alphabet* (string->list "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"))
+
+;this can be used as another way to check section markers since they are very often in all-caps. 
+(define (all-caps? string)
+  (if (member #f (map (lambda (x) (if (member x (sublist *alphabet* 0 26)) #t #f)) 
+		  (string->list string)))
+      #f
+      #t))
 
 (define (access-file name)
   (if (assoc name *open-paths*)
