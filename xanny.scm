@@ -235,12 +235,36 @@ state. This is what'll be used in pattern matching since it'll keep x? in a stri
 	      (trim-spaces-aux (string->list (trim-string (list->string lst))))
 	      (list->string lst)))))
 
+
+
 ;I think this is being overzealous and getting rid of things like #\" and such. it's this
 (define (trim-returns string)
   (let ((lst (string->list string)))
     (if (newline? (last lst))
 	(trim-string string)
 	string)))
+
+(define (trim-numbers string)
+  (trim-numbers-aux (string->list string)))
+
+(define (trim-numbers-aux lst)
+  (if (number? (char->number (last lst)))
+      (trim-numbers-aux (trim-list lst))
+      (list->string lst)))
+
+(define (char->string char)
+  (if (not (void? char))
+      (list->string (list char))))
+;not sure how this could even get called with a void value... 
+(define (char->number char)
+  (if (not (void? char))
+      (string->number (list->string (list char)))))
+
+(define (trim-list lst)
+  (reverse (cdr (reverse lst))))
+
+(define (cleanup-string string)
+  (trim-spaces (trim-numbers (trim-returns string))))
 
 (define (count-sentences string)
   (+ (char-count #\. string) (char-count #\? string)
@@ -353,7 +377,19 @@ state. This is what'll be used in pattern matching since it'll keep x? in a stri
       (if (equal? element (car lst))
 	  (element-count-aux element (cdr lst) (1+ count))
 	  (element-count-aux element (cdr lst) count))))
-		  
+	
+;fix this so it'll count more than just the first sequence, but will return the longest? 
+(define (elements-in-row-count element lst)
+  "will return how many items it found in a row. starting with the first sequence."
+  (elements-in-row-count-aux element lst 0 #f))
+
+(define (elements-in-row-count-aux element lst count begun?)
+  (if (and begun? (not (equal? element (car lst))))
+      count
+      (if (equal? element (car lst))
+	  (elements-in-row-count-aux element (cdr lst) (1+ count) #t)
+  	  (elements-in-row-count-aux element (cdr lst) count #f))))
+	  
 (define (char-count ch string)
   "count instances of a char in a string."
   (element-count ch (string->list string)))
@@ -414,6 +450,17 @@ procedure must produce a side effect of some kind, can't just return a value."
   (let ((true? #f))
     (sentence-loop (lambda (w) (if (equal? word w) (set! true? #t))) string)
     true?))
+
+;count syllables for determing meter of poetry. 
+
+(define (sublist lst start end)
+  (sublist-aux lst start end '()))
+
+(define (sublist-aux lst start end lst2)
+  (if (eqv? start end)
+      (reverse lst2)
+;      (reverse (cons (nth end lst) lst2))
+      (sublist-aux lst (1+ start) end (cons (nth start lst) lst2))))
 
 ;=========================================
 ;Patern matching
@@ -693,15 +740,33 @@ procedure must produce a side effect of some kind, can't just return a value."
 ;spaced over twice, and then another two if indented. 
 (define (indented? string)
   (let ((string (string->list string)))
-    (exact-subset? (string->list "    ") string)))
+    (if (> (length string) 4)
+	(exact-subset? (string->list "    ") (sublist string 0 4))
+	#f)))
+
+;technically this only checks justified from the left, won't tell you if its right justified,
+;but that's not really necessary for english. 
+(define (justified? string)
+  "this is another way to mark the change of a section or segment depending on the text."
+  (let ((string (string->list string)))
+    (if (> (elements-in-row-count #\space (string->list string)))
+	#t
+	#f)))
+
+;write a function that justifies text. 
 
 ;the sentence isn't a fundamental unit of poetry the way it is for prose, maybe why
 ;I'm less comfortable with it. It'd be nice to also have access them. 
 ;let them specify how many indexes they want? faerie queene should be 4 indexes, maybe dante too. 
 ;some things aren't returned between paragraphs, but feature an indentation. Account for this somehow
 ;sometimes it'll dwell on one line for a long time it seems. 
-;also have the user add a segment-marker-procedure such as newline? or indented? 
-(define (map-poetry name filename section-marker segment-procedure)
+;also have the user add a segment-marker-procedure such as newline? or indented?
+;it seems that segment is incrementing at the wrong times. seems it sometimes increments without passing segment-procedure. odd. 
+;I'm not happy with the way sections are always mapped, they should be alone at (x 0 0), but for PR
+;it puts it in with the whole paragraph. OH! it's cause the first paragraph following isn't indented.
+;argh. make it a special case, or just fix the four places it appears. will I encounter it again? 
+;alternatively I could say that a section marker is its own segment! 
+(define (map-poetry name filename section-marker segment-procedure map-segment?)
   (let ((table (make-table))
 	(section 0) ;book/canto
 	(segment 0)
@@ -709,26 +774,41 @@ procedure must produce a side effect of some kind, can't just return a value."
     (fold-lines-in-file
      filename
      (lambda (line line-num)
-      ; (println line)
       ;(println section-marker " " (section-match? section-marker (trim-returns (trim-spaces line))))
-      (println section " " segment " " line-number)
-       (if ;(prose-section? (trim-spaces line) section-marker)
-	(section-match? section-marker (trim-returns (trim-spaces line)))
+      ;(println section " " segment " " line-number (segment-procedure line))
+       (if (section-match? section-marker (trim-returns (trim-spaces line))) 
 	   (begin
 	     (set! section (1+ section))
 	     (set! segment 0)
 	     (set! line-number 0)))
-       (if (segment-procedure line)
+       (if (segment-procedure line) ;something is going wrong with this for indentation. 
 	   (begin
-	     (set! segment (1+ segment)) ;does segment reset line-number? if it does you should still be able to access things by lline number. this method is less useful for say Dante, because each segment is always 6 lines, so its more desireable to get things by line number. 
-	     (set! line-number 0))
-	   (begin 
-	     (table-set! table (list section segment line-number) (trim-spaces (trim-returns line)))
-	     (set! line-number (1+ line-number))))
+	     (set! segment (1+ segment)) 
+	     (set! line-number 0)
+	     (if (and map-segment? (not (empty? (cleanup-string line)))) 
+		 (begin 
+		   (table-set! table (list section segment line-number) 
+			       (cleanup-string line))
+		   (set! line-number (1+ line-number))))) 
+	   (if (not (empty? (cleanup-string line)))
+	       (begin 
+		 (table-set! table (list section segment line-number) (cleanup-string line))
+		 (set! line-number (1+ line-number))
+		 (if (and (section-match? section-marker (trim-returns (trim-spaces line))) map-segment?) ;hmm, this is a pretty hacky solution. might only be sustainable if segment-procedure and map-segment always correspond to (newline? #f) and (indented? #t)
+;this is so section marker is mapped to its own segment, skips too far though on newline? 
+		     (begin (set! segment (1+ segment))
+			    (set! line-number 0))))))
+       (println section " " segment " " line-number (segment-procedure line) " " line)
        (1+ line-num)) 1)
     (if (path-opened? name)
 	(set! *open-paths* (cons (cons name table) (delete-assoc name *open-paths*))) ;use replace here? 
 	(set! *open-paths* (cons (cons name table) *open-paths*)))))
+;on incrementing segment: ;does segment reset line-number? if it does you should still be able to access things by lline number. this method is less useful for say Dante, because each segment is always 6 lines, so its more desireable to get things by line number. 
+
+;===============================================================================
+;===============================================================================
+;PLAY formatting
+;===============================================================================
 
 
 ;===============================================================================
@@ -875,6 +955,10 @@ procedure must produce a side effect of some kind, can't just return a value."
 ;(define (copy-text text copy-to)
  ; '())
 
+;experiment with writing table->list to a file, then reading that list as a whole
+;and converting it to a table. will need a read function that takes in a whole file, 
+;not just a single line. 
+
 ;===============================================================================
 ;===============================================================================
 ;READING from files
@@ -949,6 +1033,10 @@ procedure must produce a side effect of some kind, can't just return a value."
 ;===============================================================================
 ;Since I've got access to all of C I should really take advantage of the more 
 ;intricate features of word-net. It'd be perfect for xanadu!
+
+;given that Word Net definitions are sometimes inaccurate, and almost always sparse, it
+;might be useful to process a dictionary from gutenberg and incorporate definitions from 
+;that into wordnet. 
 
 (define *alphabet* (string->list "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"))
 
