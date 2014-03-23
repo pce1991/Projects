@@ -72,7 +72,7 @@
   (if (and (member a lst) (member b lst))
       (> (length (member a lst))
 	 (length (member b lst)))
-      "either a or b is not in the list.")) ;should use a better method of error breaking. 
+      #f)) ;should use a better method of error breaking. 
 
 ;weird that this is required to set lists. 
 (define (list-set! list k val)
@@ -318,9 +318,11 @@ state. This is what'll be used in pattern matching since it'll keep x? in a stri
 	(last str))))
 
 (define (first-char string)
-  (let ((str (string->list string)))
-    (if (not (null? str))
-	(car str))))
+  (if (string? string)
+      (let ((str (string->list string)))
+	(if (not (null? str))
+	    (car str)))
+      #f))
 
 ;maybe convert ch to a char if it isn't. 
 (define (find-char ch word)
@@ -404,14 +406,19 @@ state. This is what'll be used in pattern matching since it'll keep x? in a stri
 (define (string-begins? string beginning)
   (equal? beginning (nth-word 0 string)))
 
-(define (before-in-alphabet? str1 str2)
-  (before? (first-char str1) (first-char str2) *alphabet*))
+(define (lower-letter? x y)
+  "returns #t if x is a lower char than y, or if the first char of x is lower than
+first char of y. A is higher than Z."
+  (if (and (string? x) (string? y))
+      (before? (first-char x) (first-char y) *alphabet*)
+      (if (and (char? x) (char? y))
+	  (before? x y *alphabet*))))
 
 ;allow this to take in infinite arguments for a much more useful function. 
-(define (lower-letter str1 str2)
-  (if (before-in-alphabet? str1 str2)
-      str1
-      str2))
+(define (higher-letter? str1 str2)
+  (lower-letter? str2 str1))
+
+;do a different version of there's where it returns the word that satisfies predicate. 
 
 (define (get-least lst)
   (if (pair? lst)
@@ -823,12 +830,29 @@ procedure must produce a side effect of some kind, can't just return a value."
 
 ;===============================================================================================
 ;===============================================================================================
+;SYLLABLES
+;===============================================================================================
+
+;I could use a grab pronunciations from a dictionary, which would be the most accurate way. 
+
+;===============================================================================================
+;===============================================================================================
+;GRAMMAR
+;===============================================================================================
+
+;users websters unabridged to work get etymologies and group them by family, even represent a 
+;tree where the furthest ancestor is at the top. 
+
+;===============================================================================================
+;===============================================================================================
 ;PLAY formatting
 ;===============================================================================================
 
 ;(section-match? "ACT ?x Scene ?y" line) ;acts may sometimes be followed by a description of
 ;of where they are taking place, and maybe some introductory stage direction. 
 ;stage directions are justified. these may in the middle of a line, so how to index that? 
+
+;for each play make a list of characters, 
 
 ;===============================================================================================
 ;===============================================================================================
@@ -991,6 +1015,11 @@ one off the end."
   (for-each (lambda (x) (println (indent (append-paragraph-list x))))
 	    (get-first text first)))
 
+;write other print functions. 
+
+;write functions to get info on indexes. things like counting the number of words, nouns, verbs
+;sentences, meter, etcetera. 
+
 ;===============================================================================
 ;===============================================================================
 ;WRITING to files
@@ -1113,6 +1142,8 @@ one off the end."
 
 
 ;pretty slow and horrible. use a divide and conquer approach. divide based on letter? 
+;since wordnet has a built in function to do this, I should write this one to work with
+;websters instead. 
 (define (find-word-aux word dict start length)
   (if (eq? start length)
       #f
@@ -1120,6 +1151,42 @@ one off the end."
 	  (table-ref dict start)
 	  (find-word-aux word dict (1+ start) length))))
     
+(define (definition? string)
+  "a definition is either Defn: if there's only one sense, or a number if there's multiples.
+uses nth-word so ignores punctuation."
+  (or (equal? (nth-word 0 string) "Defn")
+      (number? (string->number (nth-word 0 string)))))
+      
+(define (synonyms? string)
+  (equal? (nth-word 0 string) "Syn"))
+
+;write now this just maps the words so I can get a pronunciation for each. 
+(define (map-dictionary)
+  (let ((table (make-table))
+	(letter 0) ;0-25 representing letters of the alphabet. 
+	(word-number 0)
+	(definition 0) ;maybe add a sub-definition also like 1. a) b) 2. a) b) c)
+	(entry '())) ;this will collect the data on the word
+    (fold-lines-in-file 
+     "~/Projects/xanny/websters.txt"
+     (lambda (line line-num)
+       (println letter " " word-number " " line)
+       ;increase the letter index if word begins with a new letter. 
+       (if (and (eqv? 1 (word-count line)) (not (newline? line)) (all-caps? (trim-returns line))
+		(higher-letter? (first-char line) (nth letter *alphabet*)))
+	   (begin (set! letter (1+ letter)) 
+		  (set! word-number 0))) ;really slows it down :\
+       (cond ((and (eqv? 1 (word-count line));ifsentence count is one then its beginning of entry
+		   (all-caps? (trim-returns line)) (not (newline? line)))
+	      (table-set! table (list letter word-number 1) (reverse entry)) ;place holder of 1. 
+	      (set! entry '())
+	      (set! word-number (1+ word-number))
+	      (table-set! table (list letter word-number definition) line)) 
+	     ((not (newline? line)) (set! entry (cons line entry))))) 1)
+    (if (path-opened? 'dict)
+	(set! *open-paths* (cons (cons 'dict table) (delete-assoc name *open-paths*))) ;use replace here? 
+	(set! *open-paths* (cons (cons 'dict table) *open-paths*)))))
+
 ;===============================================================================
 ;===============================================================================
 ;PARSING/NLP
@@ -1153,8 +1220,8 @@ one off the end."
  (lambda (line line-num) 
    (println line-num "     " line) (1+ line-num)) 1)
 
-(define *dictionary* 
-  (load-path 'dictionary "~/Projects/DICTIONARIES/WordNet-3.0/dict/word-list.txt"))
+;(define *dictionary* 
+ ; (load-path 'dictionary "~/Projects/DICTIONARIES/WordNet-3.0/dict/word-list.txt"))
 
 ;Map the paths here
 (map-paths)
