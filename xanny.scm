@@ -338,12 +338,14 @@ state. This is what'll be used in pattern matching since it'll keep x? in a stri
   (get-least (filter number? 
 	  (list (find-char #\. string) (find-char #\! string) (find-char #\? string)))))
 
-;change this! use aif here. 
 (define (find-other-punctuation word)
+  "finds punctuation beyond end of sentence markers."
   (get-least (filter number? (list (find-char #\, word) (find-char #\" word)
+				   (find-char #\' word) (find-char #\* word) (find-char #\` word)
 				   (find-char #\) word) (find-char #\( word)))))
 
 (define (list-index element lst)
+  "returns the position of an element in a list. maybe change the name to position for clarity." 
   (list-index-aux element lst 0))
 
 (define (list-index-aux element lst position)
@@ -422,7 +424,8 @@ first char of y. A is higher than Z."
 
 (define (get-least lst)
   (if (pair? lst)
-      (get-lowest-aux lst (car lst)))) ;won't work with negatives since lowest starts at 0. 
+      (get-lowest-aux lst (car lst))
+      #f)) ;won't work with negatives since lowest starts at 0. 
 
 (define (get-lowest-aux lst lowest)
   (if (null? lst)
@@ -835,6 +838,8 @@ procedure must produce a side effect of some kind, can't just return a value."
 
 ;I could use a grab pronunciations from a dictionary, which would be the most accurate way. 
 
+;use (thread-sleep! x) to print out each syllable in rhythm
+
 ;===============================================================================================
 ;===============================================================================================
 ;GRAMMAR
@@ -986,6 +991,9 @@ procedure must produce a side effect of some kind, can't just return a value."
       (thirds-in-second-aux text first second (1+ count))
       count))
 
+(define (last-second text first)
+  (get-second text first (seconds-in-first text first)))
+
 ;write something that loops through the whole file and performs procedures on each entry. 
 ;very un lispy to use so many loops. since I can get firsts maybe just loop through that, then
 ;for each list in first, apply proc to it, actually use for-each instead. 
@@ -1003,6 +1011,15 @@ procedure must produce a side effect of some kind, can't just return a value."
 	      (loop-seconds (1+ j)))))
       (if (< i firsts)
 	  (loop-firsts (1+ i))))))
+;a problem with text loop is it can't terminate at a certain point but must finish. 
+
+;write a loop that will only go through certain part, so loop-first-index, (go through each
+;second in a first.  loop-second-index (go through each third in a second.) 
+
+;write a version of this that lets you start at certain points, it could either only search
+;those, or continue searching past them. for dictionary stuff if you're looking for a word
+;beginning with B it stops if it moves past B. But you could be looking for something after
+;act III, so it'll continue past that point. 
 
 (define (append-paragraph-list lst)
   "appends all the sentences in a pargraph with an extra space between them, and trims the last
@@ -1033,7 +1050,10 @@ one off the end."
 
 ;experiment with writing table->list to a file, then reading that list as a whole
 ;and converting it to a table. will need a read function that takes in a whole file, 
-;not just a single line. 
+;not just a single line. the trouble is the list is read as lines, or at least each of its
+;string entries are. if I can't get it to print in a chunk (which might be too big to
+;read anyway use a stack method of grouping lists by pushing ( and popping once closed. 
+
 
 ;===============================================================================
 ;===============================================================================
@@ -1116,12 +1136,44 @@ one off the end."
 
 (define *alphabet* (string->list "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"))
 
+(define (letter? char)
+  (if (member char *alphabet*)
+      #t
+      #f))
+
 ;this can be used as another way to check section markers since they are very often in all-caps. 
 (define (all-caps? string)
   (if (member #f (map (lambda (x) (if (member x (sublist *alphabet* 0 26)) #t #f)) 
 		  (string->list string)))
       #f
       #t))
+
+(define (capital? char)
+  (if (member char (sublist *alphabet* 0 26))
+      #t
+      #f))
+
+(define (char-capitalize char)
+  (if (not (capital? char))
+      (nth (- (list-index char *alphabet*)
+	      26) *alphabet*)))
+
+(define (string-uppercase string)
+  (if (all-caps? string)
+      string
+      (string-uppercase-aux (string->list string) 0)))
+
+;WARNING! this only works if its all letters, and none of them are already capitalized. 
+(define (string-uppercase-aux list position)
+  (if (eqv? position (length list))
+      (list->string list)
+      (if (not (capital? (nth position list)))
+	  (string-uppercase-aux (replace (nth position list) 
+					  (nth (- (list-index (nth position list) *alphabet*)
+						  26) *alphabet*) list)
+				 (1+ position)))))
+
+;write a downcase version. 
 
 (define (access-file name)
   (if (assoc name *open-paths*)
@@ -1134,23 +1186,32 @@ one off the end."
   (nth-word 0 entry))
 
 (define (word-type entry)
-  (cdr (assoc (nth-word 1 entry) *word-types*)))
-  
-(define (find-word word)
-  (let ((dict (access-file 'dictionary)))
-    (find-word-aux word dict 1 (table-length dict))))
+  (cdr (assoc (nth-word 1 entry) *word-types*)))    
 
+(define (alphabet-index letter)
+  (if (not (capital? letter))
+      (list-index (char-capitalize letter) *alphabet*)
+      (list-index letter *alphabet*)))
 
-;pretty slow and horrible. use a divide and conquer approach. divide based on letter? 
-;since wordnet has a built in function to do this, I should write this one to work with
-;websters instead. 
-(define (find-word-aux word dict start length)
-  (if (eq? start length)
-      #f
-      (if (equal? word (get-word (table-ref dict start)))
-	  (table-ref dict start)
-	  (find-word-aux word dict (1+ start) length))))
-    
+(define (find-entry text word)
+  (let* ((first (alphabet-index (first-char word)))
+	 (seconds (seconds-in-first text first))
+	 (result '())
+	 (continue? #t))
+    (let loop-seconds ((i 0))
+      	  (if (letter? (first-char word))
+	      (if (equal? (string-uppercase word) (trim-returns (get-third text first i 0)))
+		  (begin 
+		    (set! continue? #f)
+		    (set! result (get-second text first i)))))
+	  (if (and (< i seconds) continue?)
+	      (loop-seconds (1+ i))))
+    result))
+
+(define (entry-name entry)
+  "returns the name of the entry."
+  (car (car entry)))
+
 (define (definition? string)
   "a definition is either Defn: if there's only one sense, or a number if there's multiples.
 uses nth-word so ignores punctuation."
@@ -1161,32 +1222,66 @@ uses nth-word so ignores punctuation."
   (equal? (nth-word 0 string) "Syn"))
 
 ;write now this just maps the words so I can get a pronunciation for each. 
+;entry is just a list of each lines so its prety useless right now. parse through it later
+;but for now its easy to get pronunciation from it. 
+;hmm, it seems some words are spilling over. like entry 3 should be only D, but it includes 
+;both C and D. 
+;GACK!!!!!!!!!!!!!
 (define (map-dictionary)
   (let ((table (make-table))
 	(letter 0) ;0-25 representing letters of the alphabet. 
-	(word-number 0)
+	(word-number -1) ;start here for 0 indexing. 
 	(definition 0) ;maybe add a sub-definition also like 1. a) b) 2. a) b) c)
 	(entry '())) ;this will collect the data on the word
     (fold-lines-in-file 
      "~/Projects/xanny/websters.txt"
      (lambda (line line-num)
-       (println letter " " word-number " " line)
        ;increase the letter index if word begins with a new letter. 
        (if (and (eqv? 1 (word-count line)) (not (newline? line)) (all-caps? (trim-returns line))
 		(higher-letter? (first-char line) (nth letter *alphabet*)))
-	   (begin (set! letter (1+ letter)) 
-		  (set! word-number 0))) ;really slows it down :\
+	   (begin 
+	     ;set the contents of the previous word. 
+	     (table-set! table (list letter word-number 1) (reverse entry))
+	     (set! letter (1+ letter)) 
+	     (set! word-number -1))) ;-1 because my cond will always inc word-number before
+;entering the data. I should clean this up with last entrys spilling over. 
        (cond ((and (eqv? 1 (word-count line));ifsentence count is one then its beginning of entry
 		   (all-caps? (trim-returns line)) (not (newline? line)))
-	      (table-set! table (list letter word-number 1) (reverse entry)) ;place holder of 1. 
+	      (table-set! table (list letter word-number 1) (reverse entry)) ;this may cause problems since the last words entry will carry over, but be mapped to the incremented letter... 
 	      (set! entry '())
 	      (set! word-number (1+ word-number))
-	      (table-set! table (list letter word-number definition) line)) 
+	      (table-set! table (list letter word-number 0) line)) ;placeholder 0
 	     ((not (newline? line)) (set! entry (cons line entry))))) 1)
     (if (path-opened? 'dict)
 	(set! *open-paths* (cons (cons 'dict table) (delete-assoc name *open-paths*))) ;use replace here? 
 	(set! *open-paths* (cons (cons 'dict table) *open-paths*)))))
 
+;these following functions only work assuming the word is from websters. I'll need another way of
+;syllabofying 
+(define (get-syllables word-entry)
+  (nth-word 0 (car (cadr word-entry))))
+
+(define (find-markup word) 
+  "finds symbols that aren't punctuation in the grammatical sense."
+  (find-other-punctuation word))
+
+(define (split-up-syllables word)
+  (split-up-syllables-aux word '()))
+
+(define (split-up-syllables-aux word lst)
+  (println word " " lst)
+  (if (not (find-markup word))
+      (reverse (cons word lst))
+      (let ((divider (1+ (find-markup word))) ;1+ so it preserves the marker. 
+	    (length (string-length word)))
+	(split-up-syllables-aux (substring word divider length)
+				(cons (substring word 0 divider) lst)))))
+
+(define (syllable-count word)
+  "word is a dictionary entry, not a single string."
+  (length (split-up-syllables word)))
+      
+  
 ;===============================================================================
 ;===============================================================================
 ;PARSING/NLP
@@ -1225,3 +1320,4 @@ uses nth-word so ignores punctuation."
 
 ;Map the paths here
 (map-paths)
+
