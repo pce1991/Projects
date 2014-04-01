@@ -1,0 +1,7 @@
+(:MONTH 2 :DATE 26 :YR 2014 (:DAY 2 :HR 12 :MIN 2 :SEC 7)): jkdsa sl(:MONTH 2
+                                                                     :DATE 26
+                                                                     :YR 2014
+                                                                     (:DAY 2
+                                                                      :HR 12
+                                                                      :MIN 2
+                                                                      :SEC 10))
