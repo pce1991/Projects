@@ -2,22 +2,26 @@
            name
            ;ATTributes. How would I put these in a list (attributes (...)) and access them? 
            strength 
-              dexterity 
-              cunning
-              ;STATS
-              health 
-              stamina 
-              will)
+           dexterity 
+           cunning
+           ;STATS
+           health
+           stamina 
+           will)
 
 (defparameter *points* 20)
 
 (defparameter *player* (make-player :name nil
-                                    :strength (+ 3 (random 2))
-                                    :dexterity (+ 3 (random 2))
-                                    :cunning (+ 3 (random 2))
+                                    :strength 5
+                                    :dexterity 5
+                                    :cunning 5
                                     :health 10
                                     :stamina 10
                                     :will 10))
+
+(defparameter *player-stance* '((defensive aggressive evasive reactive))) ;reactive means to counter an attack
+
+(defparameter *inventory* nil) 
 
 ;this will create the character, giving a name to display and setting attributes and stats(setf *player* )
 (defun create-player()
@@ -28,7 +32,7 @@
   (princ *points*)
   (princ " points across your attributes.")
   (loop while (> *points* 0) do
-        (select-stat)) )
+        (spend-points)) )
 
 (defun spend-points()
   (princ "Select which attribute or stat: ")
@@ -67,3 +71,6 @@
        (setf *points* (- *points* x))))
     (otherwise (princ "That is not a valid stat symbol, please enter again: ")
                (spend-points)) ))
+
+
+
